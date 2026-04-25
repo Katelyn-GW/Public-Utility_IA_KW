@@ -179,7 +179,8 @@ export default function Library() {
                   {libraryItems.map((item) => (
                     <div
                       key={item.id}
-                      className="group relative overflow-hidden rounded-lg border border-white/25 bg-black shadow-[4px_4px_0px_0px_rgba(255,255,255,0.12)]"
+                      onClick={() => handleEditDescription(item)}
+                      className="group relative cursor-pointer overflow-hidden rounded-lg border border-white/25 bg-black shadow-[4px_4px_0px_0px_rgba(255,255,255,0.12)]"
                     >
                       <div className="flex items-center justify-center bg-black p-2">
                         <img
@@ -297,27 +298,24 @@ export default function Library() {
               className="mb-4 w-full rounded-lg border border-white/20 bg-black p-3 text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-white/30"
               rows={4}
             />
-            <div className="flex gap-4">
-              <button
-                onClick={() => {
-                  setEditingDescription(false);
-                  setSelectedItem(null);
-                }}
-                className="flex-1 rounded-lg border border-white/25 bg-black py-3 font-['Fugaz_One:Regular',sans-serif] text-white shadow-[2px_4px_0px_0px_rgba(255,255,255,0.12)]"
-              >
-                Cancel
-              </button>
+            <div className="flex gap-3">
               <button
                 onClick={handleSaveDescription}
-                className="flex-1 rounded-lg border border-white/25 bg-white py-3 font-['Fugaz_One:Regular',sans-serif] text-black shadow-[2px_4px_0px_0px_rgba(255,255,255,0.15)]"
+                className="flex-1 rounded-lg border border-white/25 bg-black py-3 font-['Fugaz_One:Regular',sans-serif] text-white shadow-[2px_4px_0px_0px_rgba(255,255,255,0.12)] active:bg-white active:text-black"
               >
                 Save
               </button>
               <button
                 onClick={() => handleDeleteTattoo(selectedItem.id)}
-                className="rounded-lg border border-red-500/60 bg-red-950 px-4 py-3 font-['Fugaz_One:Regular',sans-serif] text-red-100 shadow-[2px_4px_0px_0px_rgba(255,255,255,0.12)]"
+                className="flex-1 rounded-lg border border-white/25 bg-black py-3 font-['Fugaz_One:Regular',sans-serif] text-white shadow-[2px_4px_0px_0px_rgba(255,255,255,0.12)] active:bg-white active:text-black"
               >
                 Delete
+              </button>
+              <button
+                onClick={() => navigate(`/ar-camera/${selectedItem.id}`)}
+                className="flex-1 rounded-lg border border-white/25 bg-black py-3 font-['Fugaz_One:Regular',sans-serif] text-white shadow-[2px_4px_0px_0px_rgba(255,255,255,0.12)] active:bg-white active:text-black"
+              >
+                Try On
               </button>
             </div>
           </div>
