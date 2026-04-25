@@ -18,7 +18,6 @@ import {
   videoPixelToContainerPoint,
   videoPixelToTrackPixel,
 } from "../utils/plusPatchTrack";
-import { drawCylinderWrappedImage } from "../utils/cylinderWrap";
 
 function snapTattooCenterToPoint(
   t: TattooTransform,
@@ -229,8 +228,7 @@ export default function ARCamera() {
     scaleX: number,
     scaleY: number,
     offsetX: number = 0,
-    offsetY: number = 0,
-    cylinderWrap: boolean = false
+    offsetY: number = 0
   ) => {
     const cx = (t.x - offsetX + t.width / 2) * scaleX;
     const cy = (t.y - offsetY + t.height / 2) * scaleY;
@@ -241,18 +239,8 @@ export default function ARCamera() {
     ctx.globalAlpha = 0.9;
     ctx.translate(cx, cy);
     ctx.rotate((t.rotation * Math.PI) / 180);
-    if (cylinderWrap) {
-      drawCylinderWrappedImage(ctx, tattooImg, w, h, {
-        strength: 0.32,
-        slices: 72,
-        flipX: t.flipX,
-        flipY: t.flipY,
-        alpha: 0.9,
-      });
-    } else {
-      ctx.scale(t.flipX ? -1 : 1, t.flipY ? -1 : 1);
-      ctx.drawImage(tattooImg, -w / 2, -h / 2, w, h);
-    }
+    ctx.scale(t.flipX ? -1 : 1, t.flipY ? -1 : 1);
+    ctx.drawImage(tattooImg, -w / 2, -h / 2, w, h);
     ctx.restore();
   };
 
@@ -315,8 +303,7 @@ export default function ARCamera() {
             scaleX,
             scaleY,
             offsetX,
-            offsetY,
-            isMobileView
+            offsetY
           );
           savePhoto(canvas.toDataURL("image/png"));
         };
@@ -360,8 +347,7 @@ export default function ARCamera() {
           scaleX,
           scaleY,
           0,
-          0,
-          isMobileView
+          0
         );
         savePhoto(canvas.toDataURL("image/png"));
       };
@@ -723,7 +709,6 @@ export default function ARCamera() {
                     onInitialPlace={setTattooTransform}
                     locked={tattooLocked}
                     onToggleLock={() => setTattooLocked((prev) => !prev)}
-                    cylinderWrap={isMobileView}
                   />
                 )}
               </div>
@@ -898,7 +883,6 @@ export default function ARCamera() {
                       onInitialPlace={setTattooTransform}
                       locked={tattooLocked}
                       onToggleLock={() => setTattooLocked((prev) => !prev)}
-                      cylinderWrap={isMobileView}
                     />
                   )}
                   <p className="absolute left-1/2 top-4 -translate-x-1/2 rounded-lg bg-black/70 px-4 py-2 text-sm text-white pointer-events-none z-30">
@@ -950,7 +934,6 @@ export default function ARCamera() {
                       onInitialPlace={setTattooTransform}
                       locked={tattooLocked}
                       onToggleLock={() => setTattooLocked((prev) => !prev)}
-                      cylinderWrap={isMobileView}
                     />
                   )}
                   <p className="absolute left-1/2 top-4 -translate-x-1/2 rounded-lg bg-black/70 px-4 py-2 text-sm text-white pointer-events-none z-30">

@@ -1,6 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { Check, FlipHorizontal2, FlipVertical2, RotateCcw } from "lucide-react";
-import { drawCylinderWrappedImage } from "../utils/cylinderWrap";
 
 export interface TattooTransform {
   x: number;
@@ -20,7 +19,6 @@ interface Props {
   onInitialPlace: (t: TattooTransform) => void;
   locked?: boolean;
   onToggleLock?: () => void;
-  cylinderWrap?: boolean;
 }
 
 type HandleType =
@@ -43,7 +41,6 @@ export default function TattooTransformOverlay({
   onInitialPlace,
   locked = false,
   onToggleLock,
-  cylinderWrap = false,
 }: Props) {
   const [drawing, setDrawing] = useState(false);
   const [drawStart, setDrawStart] = useState<{ x: number; y: number } | null>(null);
@@ -203,47 +200,6 @@ export default function TattooTransformOverlay({
 
   // Draw preview line while drawing initial rect
   const [currentDraw, setCurrentDraw] = useState<{ x: number; y: number } | null>(null);
-  const wrappedCanvasRef = useRef<HTMLCanvasElement | null>(null);
-
-  useEffect(() => {
-    if (!cylinderWrap || !transform || !wrappedCanvasRef.current) return;
-
-    const canvas = wrappedCanvasRef.current;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    const dpr =
-      typeof window !== "undefined"
-        ? Math.min(2, window.devicePixelRatio || 1)
-        : 1;
-    const w = Math.max(1, Math.round(transform.width));
-    const h = Math.max(1, Math.round(transform.height));
-    if (canvas.width !== Math.round(w * dpr)) canvas.width = Math.round(w * dpr);
-    if (canvas.height !== Math.round(h * dpr)) canvas.height = Math.round(h * dpr);
-    canvas.style.width = `${w}px`;
-    canvas.style.height = `${h}px`;
-
-    const img = new Image();
-    img.onload = () => {
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = "high";
-      ctx.scale(dpr, dpr);
-      ctx.save();
-      ctx.translate(w / 2, h / 2);
-      drawCylinderWrappedImage(ctx, img, w, h, {
-        strength: 0.32,
-        slices: 72,
-        flipX: transform.flipX,
-        flipY: transform.flipY,
-        alpha: 0.92,
-      });
-      ctx.restore();
-    };
-    img.src = processedTattooUrl;
-  }, [cylinderWrap, processedTattooUrl, transform]);
-
   const handleDrawMove = useCallback(
     (e: React.MouseEvent | React.TouchEvent) => {
       if (!drawing || !drawStart) return;
@@ -301,23 +257,16 @@ export default function TattooTransformOverlay({
             }}
           >
             {/* Tattoo image */}
-            {cylinderWrap ? (
-              <canvas
-                ref={wrappedCanvasRef}
-                className="pointer-events-none absolute inset-0 h-full w-full"
-              />
-            ) : (
-              <img
-                src={processedTattooUrl}
-                alt="Tattoo overlay"
-                className="pointer-events-none absolute inset-0 h-full w-full"
-                style={{
-                  opacity: 0.9,
-                  transform: `scaleX(${transform.flipX ? -1 : 1}) scaleY(${transform.flipY ? -1 : 1})`,
-                }}
-                draggable={false}
-              />
-            )}
+            <img
+              src={processedTattooUrl}
+              alt="Tattoo overlay"
+              className="pointer-events-none absolute inset-0 h-full w-full"
+              style={{
+                opacity: 0.9,
+                transform: `scaleX(${transform.flipX ? -1 : 1}) scaleY(${transform.flipY ? -1 : 1})`,
+              }}
+              draggable={false}
+            />
 
             {/* Bounding box */}
             <div
