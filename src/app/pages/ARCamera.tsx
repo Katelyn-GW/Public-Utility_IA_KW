@@ -423,6 +423,8 @@ export default function ARCamera() {
     let vfcHandle: number | null = null;
 
     let lastUpdate = 0;
+    let missStreak = 0;
+    let highConfidenceStreak = 0;
     const runOne = () => {
       if (cancelled) return;
 
@@ -481,7 +483,38 @@ export default function ARCamera() {
         pred.ty
       );
       if (!match) return;
-      if (match.score < 0.11) return;
+      if (match.score < 0.075) {
+        missStreak += 1;
+        if (missStreak >= 4) {
+          const active = tattooTransformRef.current;
+          if (active) {
+            const centerVp = containerPointToVideoPixel(
+              video,
+              container,
+              active.x + active.width / 2,
+              active.y + active.height / 2
+            );
+            if (centerVp) {
+              const tp = videoPixelToTrackPixel(centerVp, vw, vh, trkW, trkH);
+              const rebuilt = extractTemplateFromTrackLuma(
+                luma,
+                trkW,
+                trkH,
+                tp.tx,
+                tp.ty
+              );
+              if (rebuilt) {
+                plusTemplateRef.current = rebuilt;
+                plusCenterTrackRef.current = { tx: tp.tx, ty: tp.ty };
+                plusLockedBodyRef.current = { ...active };
+              }
+            }
+          }
+          missStreak = 0;
+        }
+        return;
+      }
+      missStreak = 0;
 
       const prevV = trackPixelToVideoPixel(pred.tx, pred.ty, vw, vh, trkW, trkH);
       const nextV = trackPixelToVideoPixel(match.tx, match.ty, vw, vh, trkW, trkH);
@@ -500,14 +533,20 @@ export default function ARCamera() {
       if (!prevC || !cpt) return;
 
       const dCont = Math.hypot(cpt.x - prevC.x, cpt.y - prevC.y);
-      if (dCont > 130) {
-        return;
+      // Don't hard-break on fast motion; clamp max frame-to-frame movement.
+      const maxStep = 95;
+      let nextContainerX = cpt.x;
+      let nextContainerY = cpt.y;
+      if (dCont > maxStep) {
+        const ratio = maxStep / dCont;
+        nextContainerX = prevC.x + (cpt.x - prevC.x) * ratio;
+        nextContainerY = prevC.y + (cpt.y - prevC.y) * ratio;
       }
 
       plusCenterTrackRef.current = { tx: match.tx, ty: match.ty };
 
-      const nextX = cpt.x - body.width / 2;
-      const nextY = cpt.y - body.height / 2;
+      const nextX = nextContainerX - body.width / 2;
+      const nextY = nextContainerY - body.height / 2;
       const prev = tattooTransformRef.current;
       const now = performance.now();
       if (!prev) return;
@@ -516,7 +555,7 @@ export default function ARCamera() {
       if (now - lastUpdate < 16) return;
       lastUpdate = now;
 
-      const lerp = 0.72;
+      const lerp = 0.66;
       const smoothedX = prev.x + (nextX - prev.x) * lerp;
       const smoothedY = prev.y + (nextY - prev.y) * lerp;
       const moveDelta = Math.hypot(smoothedX - prev.x, smoothedY - prev.y);
@@ -527,6 +566,25 @@ export default function ARCamera() {
         x: smoothedX,
         y: smoothedY,
       });
+
+      // Periodically refresh template under good confidence to adapt skin lighting/pose.
+      if (match.score > 0.2) {
+        highConfidenceStreak += 1;
+        if (highConfidenceStreak >= 8) {
+          const fresh = extractTemplateFromTrackLuma(
+            luma,
+            trkW,
+            trkH,
+            match.tx,
+            match.ty
+          );
+          if (fresh) plusTemplateRef.current = fresh;
+          highConfidenceStreak = 0;
+        }
+      } else {
+        highConfidenceStreak = 0;
+      }
+
     };
 
     const continueLoop = () => {
