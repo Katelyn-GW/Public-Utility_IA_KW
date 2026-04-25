@@ -1,16 +1,34 @@
 import { defineConfig } from 'vite'
 import path from 'path'
+import { fileURLToPath } from 'node:url'
+import { spawnSync } from 'node:child_process'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 
+const rootDir = path.dirname(fileURLToPath(import.meta.url))
+
+/** Runs before import analysis so `TITLE.png` / `submark.png` etc. exist (see `scripts/ensure-splash.mjs`). */
+function ensureSplashPlugin() {
+  return {
+    name: 'ensure-splash-plugin',
+    enforce: 'pre' as const,
+    config() {
+      const script = path.join(rootDir, 'scripts', 'ensure-splash.mjs')
+      spawnSync(process.execPath, [script], {
+        cwd: rootDir,
+        stdio: 'inherit',
+      })
+    },
+  }
+}
 
 function figmaAssetResolver() {
   return {
     name: 'figma-asset-resolver',
-    resolveId(id) {
+    resolveId(id: string) {
       if (id.startsWith('figma:asset/')) {
         const filename = id.replace('figma:asset/', '')
-        return path.resolve(__dirname, 'src/assets', filename)
+        return path.resolve(rootDir, 'src/assets', filename)
       }
     },
   }
@@ -18,6 +36,7 @@ function figmaAssetResolver() {
 
 export default defineConfig({
   plugins: [
+    ensureSplashPlugin(),
     figmaAssetResolver(),
     // The React and Tailwind plugins are both required for Make, even if
     // Tailwind is not being actively used – do not remove them
@@ -27,7 +46,7 @@ export default defineConfig({
   resolve: {
     alias: {
       // Alias @ to the src directory
-      '@': path.resolve(__dirname, './src'),
+      '@': path.resolve(rootDir, './src'),
     },
   },
 

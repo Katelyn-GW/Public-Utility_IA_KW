@@ -125,33 +125,33 @@ export default function Library() {
   };
 
   return (
-    <div className="min-h-screen bg-[#8dd7ca] pb-12">
-      <Header title="Your Library" bannerImage="library" />
+    <div className="min-h-screen bg-black pb-28 text-white md:pb-12 md:pl-[7.25rem]">
+      <Header title="Your Library" />
 
       <div className="mx-auto max-w-7xl px-4 mt-6">
         {/* Tabs + Upload in one row */}
         <div className="mb-6 flex gap-2">
           <button
             onClick={() => setActiveTab("tattoos")}
-            className={`flex-1 rounded-lg border-2 border-black px-2 py-2 text-sm font-['Fugaz_One:Regular',sans-serif] shadow-[2px_4px_0px_0px_rgba(0,0,0,1)] ${
+            className={`flex-1 rounded-lg border border-white/25 px-2 py-2 text-sm font-['Fugaz_One:Regular',sans-serif] shadow-[2px_4px_0px_0px_rgba(255,255,255,0.12)] ${
               activeTab === "tattoos"
-                ? "bg-[#028a7b] text-white"
-                : "bg-[#ead3b2]"
+                ? "bg-white text-black"
+                : "bg-neutral-950 text-white"
             }`}
           >
             Saved Tattoos ({libraryItems.length})
           </button>
           <button
             onClick={() => setActiveTab("ar")}
-            className={`flex-1 rounded-lg border-2 border-black px-2 py-2 text-sm font-['Fugaz_One:Regular',sans-serif] shadow-[2px_4px_0px_0px_rgba(0,0,0,1)] ${
-              activeTab === "ar" ? "bg-[#028a7b] text-white" : "bg-[#ead3b2]"
+            className={`flex-1 rounded-lg border border-white/25 px-2 py-2 text-sm font-['Fugaz_One:Regular',sans-serif] shadow-[2px_4px_0px_0px_rgba(255,255,255,0.12)] ${
+              activeTab === "ar" ? "bg-white text-black" : "bg-neutral-950 text-white"
             }`}
           >
             AR Photos ({arPhotos.length})
           </button>
           <button
             onClick={() => navigate("/upload")}
-            className="flex-1 rounded-lg border-2 border-black bg-[#8dd7ca] px-2 py-2 text-sm font-['Fugaz_One:Regular',sans-serif] shadow-[2px_4px_0px_0px_rgba(0,0,0,1)] flex items-center justify-center gap-1.5 hover:bg-[#7cc9bc] transition-colors"
+            className="flex-1 rounded-lg border border-white/25 bg-black px-2 py-2 text-sm font-['Fugaz_One:Regular',sans-serif] text-white shadow-[2px_4px_0px_0px_rgba(255,255,255,0.12)] flex items-center justify-center gap-1.5 hover:bg-neutral-950 transition-colors"
           >
             <Upload className="h-4 w-4" />
             Upload Tattoo
@@ -163,12 +163,12 @@ export default function Library() {
           <div>
             {libraryItems.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20">
-                <p className="mb-4 font-['Fugaz_One:Regular',sans-serif] text-xl text-black/60">
+                <p className="mb-4 font-sans text-xl font-semibold text-white/60">
                   No saved tattoos yet
                 </p>
                 <button
                   onClick={() => navigate("/explore")}
-                  className="rounded-lg border-2 border-black bg-[#028a7b] px-6 py-3 font-['Fugaz_One:Regular',sans-serif] text-white shadow-[2px_4px_0px_0px_rgba(0,0,0,1)]"
+                  className="rounded-lg border border-white/25 bg-white px-6 py-3 font-['Fugaz_One:Regular',sans-serif] text-black shadow-[2px_4px_0px_0px_rgba(255,255,255,0.15)]"
                 >
                   Explore Tattoos
                 </button>
@@ -179,9 +179,9 @@ export default function Library() {
                   {libraryItems.map((item) => (
                     <div
                       key={item.id}
-                      className="group relative overflow-hidden rounded-lg border-4 border-[#028a7b] bg-[#f5efe3] shadow-[4px_4px_0px_0px_rgba(0,0,0,0.3)]"
+                      className="group relative overflow-hidden rounded-lg border border-white/25 bg-black shadow-[4px_4px_0px_0px_rgba(255,255,255,0.12)]"
                     >
-                      <div className="flex items-center justify-center bg-[#f5efe3] p-2">
+                      <div className="flex items-center justify-center bg-black p-2">
                         <img
                           src={item.imageUrl}
                           alt={item.title}
@@ -189,7 +189,7 @@ export default function Library() {
                           style={{ minHeight: "100px" }}
                         />
                       </div>
-                      <div className="bg-[#028a7b] p-2">
+                      <div className="border-t border-white/15 bg-black p-2">
                         <p className="font-['Fugaz_One:Regular',sans-serif] text-sm text-white">
                           {item.title}
                         </p>
@@ -208,9 +208,9 @@ export default function Library() {
                         </button>
                         <button
                           onClick={() => navigate(`/ar-camera/${item.id}`)}
-                          className="rounded-full bg-[#028a7b] p-2 shadow-lg"
+                          className="rounded-full bg-white p-2 shadow-lg"
                         >
-                          <Plus className="h-4 w-4 text-white" />
+                          <Plus className="h-4 w-4 text-black" />
                         </button>
                       </div>
                     </div>
@@ -226,12 +226,12 @@ export default function Library() {
           <div>
             {arPhotos.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20">
-                <p className="mb-4 font-['Fugaz_One:Regular',sans-serif] text-xl text-black/60">
+                <p className="mb-4 font-sans text-xl font-semibold text-white/60">
                   No AR photos yet
                 </p>
                 <button
                   onClick={() => navigate("/ar-camera")}
-                  className="rounded-lg border-2 border-black bg-[#028a7b] px-6 py-3 font-['Fugaz_One:Regular',sans-serif] text-white shadow-[2px_4px_0px_0px_rgba(0,0,0,1)]"
+                  className="rounded-lg border border-white/25 bg-white px-6 py-3 font-['Fugaz_One:Regular',sans-serif] text-black shadow-[2px_4px_0px_0px_rgba(255,255,255,0.15)]"
                 >
                   Try AR Camera
                 </button>
@@ -243,14 +243,14 @@ export default function Library() {
                     <div
                       key={photo.id}
                       onClick={() => openARPhotoModal(photo)}
-                      className="group relative cursor-pointer overflow-hidden rounded-lg border-4 border-[#028a7b] bg-[#72aea3] shadow-[4px_4px_0px_0px_rgba(0,0,0,0.3)] transition-transform hover:scale-[1.02]"
+                      className="group relative cursor-pointer overflow-hidden rounded-lg border border-white/25 bg-black shadow-[4px_4px_0px_0px_rgba(255,255,255,0.12)] transition-transform hover:scale-[1.02]"
                     >
                       <img
                         src={photo.imageUrl}
                         alt={photo.title || photo.tattooTitle}
                         className="h-auto w-full object-cover"
                       />
-                      <div className="bg-[#028a7b] p-2">
+                      <div className="border-t border-white/15 bg-black p-2">
                         <p className="font-['Fugaz_One:Regular',sans-serif] text-sm text-white">
                           {photo.title || photo.tattooTitle}
                         </p>
@@ -269,8 +269,8 @@ export default function Library() {
 
       {/* Edit Description Modal (Tattoo Designs) */}
       {editingDescription && selectedItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="relative w-full max-w-lg rounded-lg border-4 border-[#028a7b] bg-[#ead3b2] p-8 shadow-[8px_8px_0px_0px_rgba(0,0,0,0.3)]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="relative w-full max-w-lg rounded-lg border border-white/20 bg-neutral-950 p-8 shadow-[8px_8px_0px_0px_rgba(255,255,255,0.12)]">
             <button
               onClick={() => {
                 setEditingDescription(false);
@@ -278,23 +278,23 @@ export default function Library() {
               }}
               className="absolute right-4 top-4"
             >
-              <X className="h-6 w-6" />
+              <X className="h-6 w-6 text-white" />
             </button>
-            <div className="mb-4 overflow-hidden rounded-lg border-4 border-[#028a7b]">
+            <div className="mb-4 overflow-hidden rounded-lg border border-white/20">
               <img
                 src={selectedItem.imageUrl}
                 alt={selectedItem.title}
                 className="h-48 w-full object-cover"
               />
             </div>
-            <h2 className="mb-2 font-['Fugaz_One:Regular',sans-serif] text-xl">
+            <h2 className="mb-2 font-['Fugaz_One:Regular',sans-serif] text-xl text-white">
               {selectedItem.title}
             </h2>
             <textarea
               value={descriptionText}
               onChange={(e) => setDescriptionText(e.target.value)}
               placeholder="Add your notes about this tattoo..."
-              className="mb-4 w-full rounded-lg border-2 border-black p-3 focus:outline-none focus:ring-2 focus:ring-[#028a7b]"
+              className="mb-4 w-full rounded-lg border border-white/20 bg-black p-3 text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-white/30"
               rows={4}
             />
             <div className="flex gap-4">
@@ -303,19 +303,19 @@ export default function Library() {
                   setEditingDescription(false);
                   setSelectedItem(null);
                 }}
-                className="flex-1 rounded-lg border-2 border-black bg-[#ead3b2] py-3 font-['Fugaz_One:Regular',sans-serif] shadow-[2px_4px_0px_0px_rgba(0,0,0,1)]"
+                className="flex-1 rounded-lg border border-white/25 bg-black py-3 font-['Fugaz_One:Regular',sans-serif] text-white shadow-[2px_4px_0px_0px_rgba(255,255,255,0.12)]"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSaveDescription}
-                className="flex-1 rounded-lg border-2 border-black bg-[#028a7b] py-3 font-['Fugaz_One:Regular',sans-serif] text-white shadow-[2px_4px_0px_0px_rgba(0,0,0,1)]"
+                className="flex-1 rounded-lg border border-white/25 bg-white py-3 font-['Fugaz_One:Regular',sans-serif] text-black shadow-[2px_4px_0px_0px_rgba(255,255,255,0.15)]"
               >
                 Save
               </button>
               <button
                 onClick={() => handleDeleteTattoo(selectedItem.id)}
-                className="rounded-lg border-2 border-black bg-red-500 px-4 py-3 font-['Fugaz_One:Regular',sans-serif] text-white shadow-[2px_4px_0px_0px_rgba(0,0,0,1)]"
+                className="rounded-lg border border-red-500/60 bg-red-950 px-4 py-3 font-['Fugaz_One:Regular',sans-serif] text-red-100 shadow-[2px_4px_0px_0px_rgba(255,255,255,0.12)]"
               >
                 Delete
               </button>
@@ -326,17 +326,17 @@ export default function Library() {
 
       {/* AR Photo Detail Modal */}
       {selectedARPhoto && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-lg border-4 border-[#028a7b] bg-[#ead3b2] p-6 shadow-[8px_8px_0px_0px_rgba(0,0,0,0.3)]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-lg border border-white/20 bg-neutral-950 p-6 shadow-[8px_8px_0px_0px_rgba(255,255,255,0.12)]">
             <button
               onClick={() => setSelectedARPhoto(null)}
               className="absolute right-4 top-4 z-10"
             >
-              <X className="h-6 w-6" />
+              <X className="h-6 w-6 text-white" />
             </button>
 
             {/* AR Photo Preview */}
-            <div className="mb-4 overflow-hidden rounded-lg border-4 border-[#028a7b]">
+            <div className="mb-4 overflow-hidden rounded-lg border border-white/20">
               <img
                 src={selectedARPhoto.imageUrl}
                 alt={arTitle}
@@ -350,7 +350,7 @@ export default function Library() {
               value={arTitle}
               onChange={(e) => setArTitle(e.target.value)}
               placeholder="Give your photo a title..."
-              className="mb-3 w-full rounded-lg border-2 border-black px-4 py-3 font-['Fugaz_One:Regular',sans-serif] text-lg focus:outline-none focus:ring-2 focus:ring-[#028a7b]"
+              className="mb-3 w-full rounded-lg border border-white/20 bg-black px-4 py-3 font-['Fugaz_One:Regular',sans-serif] text-lg text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-white/30"
             />
 
             {/* Description Input */}
@@ -358,12 +358,12 @@ export default function Library() {
               value={arDescription}
               onChange={(e) => setArDescription(e.target.value)}
               placeholder="Add your notes about this AR photo..."
-              className="mb-4 w-full rounded-lg border-2 border-black p-3 focus:outline-none focus:ring-2 focus:ring-[#028a7b]"
+              className="mb-4 w-full rounded-lg border border-white/20 bg-black p-3 text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-white/30"
               rows={3}
             />
 
             {/* Date */}
-            <p className="mb-4 text-sm text-black/60">
+            <p className="mb-4 text-sm text-white/60">
               Captured on{" "}
               {new Date(selectedARPhoto.createdAt).toLocaleDateString("en-US", {
                 month: "long",
@@ -374,8 +374,8 @@ export default function Library() {
 
             {/* Success banner */}
             {postSuccess === "success" && (
-              <div className="mb-4 rounded-lg border-2 border-green-600 bg-green-100 p-3 text-center">
-                <p className="font-['Fugaz_One:Regular',sans-serif] text-sm text-green-800">
+              <div className="mb-4 rounded-lg border border-emerald-500/40 bg-emerald-950 p-3 text-center">
+                <p className="font-['Fugaz_One:Regular',sans-serif] text-sm text-emerald-100">
                   Posted to Explore! Others can now try this design.
                 </p>
               </div>
@@ -383,8 +383,8 @@ export default function Library() {
 
             {/* Error banner */}
             {postSuccess === "error" && (
-              <div className="mb-4 rounded-lg border-2 border-red-600 bg-red-100 p-3 text-center">
-                <p className="font-['Fugaz_One:Regular',sans-serif] text-sm text-red-800">
+              <div className="mb-4 rounded-lg border border-red-500/50 bg-red-950 p-3 text-center">
+                <p className="font-['Fugaz_One:Regular',sans-serif] text-sm text-red-100">
                   Error posting to Explore. Please try again.
                 </p>
               </div>
@@ -394,20 +394,20 @@ export default function Library() {
             <div className="flex flex-wrap gap-3">
               <button
                 onClick={handleSaveARPhoto}
-                className="flex-1 rounded-lg border-2 border-black bg-[#028a7b] py-3 font-['Fugaz_One:Regular',sans-serif] text-white shadow-[2px_4px_0px_0px_rgba(0,0,0,1)]"
+                className="flex-1 rounded-lg border border-white/25 bg-white py-3 font-['Fugaz_One:Regular',sans-serif] text-black shadow-[2px_4px_0px_0px_rgba(255,255,255,0.15)]"
               >
                 Save
               </button>
               <button
                 onClick={handleDownloadARPhoto}
-                className="rounded-lg border-2 border-black bg-[#ead3b2] p-3 shadow-[2px_4px_0px_0px_rgba(0,0,0,1)]"
+                className="rounded-lg border border-white/25 bg-black p-3 text-white shadow-[2px_4px_0px_0px_rgba(255,255,255,0.12)]"
                 title="Download"
               >
                 <Download className="h-5 w-5" />
               </button>
               <button
                 onClick={handlePostToExplore}
-                className="rounded-lg border-2 border-black bg-[#8dd7ca] px-4 py-3 font-['Fugaz_One:Regular',sans-serif] shadow-[2px_4px_0px_0px_rgba(0,0,0,1)] flex items-center gap-2"
+                className="flex items-center gap-2 rounded-lg border border-white/25 bg-neutral-950 px-4 py-3 font-['Fugaz_One:Regular',sans-serif] text-white shadow-[2px_4px_0px_0px_rgba(255,255,255,0.12)]"
                 title="Post tattoo design to Explore"
               >
                 <Share2 className="h-5 w-5" />
@@ -415,15 +415,15 @@ export default function Library() {
               </button>
               <button
                 onClick={() => handleDeleteARPhoto(selectedARPhoto.id)}
-                className="rounded-lg border-2 border-black bg-red-500 p-3 shadow-[2px_4px_0px_0px_rgba(0,0,0,1)]"
+                className="rounded-lg border border-red-500/60 bg-red-950 p-3 shadow-[2px_4px_0px_0px_rgba(255,255,255,0.12)]"
                 title="Delete"
               >
-                <Trash2 className="h-5 w-5 text-white" />
+                <Trash2 className="h-5 w-5 text-red-100" />
               </button>
             </div>
 
             {/* Info note about posting */}
-            <p className="mt-3 text-xs text-black/50 text-center">
+            <p className="mt-3 text-center text-xs text-white/50">
               Posting shares the <strong>tattoo design</strong> (not your AR
               photo) so others can try it in AR too.
             </p>

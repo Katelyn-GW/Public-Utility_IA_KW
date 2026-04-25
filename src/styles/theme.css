@@ -190,8 +190,13 @@
   font-family: "Fugaz One", sans-serif !important;
 }
 
-[class*="Fruktur:Italic"] {
-  font-family: "Fruktur", cursive !important;
+[class*="Pirata_One:Regular"] {
+  font-family: "Pirata One", serif !important;
+}
+
+/* Hard fallback for generated Pirata style tokens. */
+[style*="Pirata One"] {
+  font-family: "Pirata One", serif !important;
 }
 
 /* Bindery-style button press effect for all bordered buttons */
@@ -212,21 +217,30 @@ a[class*="border-black"][class*="shadow-["]:active:not(:disabled) {
   box-shadow: 0px 0px 0px 0px rgba(0,0,0,1) !important;
 }
 
+button[class*="border-white"][class*="shadow-["]:hover:not(:disabled),
+a[class*="border-white"][class*="shadow-["]:hover:not(:disabled) {
+  transform: translate(-1px, -2px);
+  box-shadow: 4px 6px 0px 0px rgba(255,255,255,0.35) !important;
+}
+
+button[class*="border-white"][class*="shadow-["]:active:not(:disabled),
+a[class*="border-white"][class*="shadow-["]:active:not(:disabled) {
+  transform: translate(2px, 4px);
+  box-shadow: 0px 0px 0px 0px rgba(255,255,255,0.35) !important;
+}
+
 @keyframes splash-gun-vibrate {
   0% {
     transform: translate(0px, 0px) rotate(-8.8deg);
   }
-  20% {
-    transform: translate(-0.8px, 0.6px) rotate(-9.4deg);
+  25% {
+    transform: translate(-0.35px, 0.2px) rotate(-9.05deg);
   }
-  40% {
-    transform: translate(0.8px, -0.6px) rotate(-8.2deg);
+  50% {
+    transform: translate(0.35px, -0.2px) rotate(-8.55deg);
   }
-  60% {
-    transform: translate(-0.7px, 0px) rotate(-9.1deg);
-  }
-  80% {
-    transform: translate(0.7px, 0.6px) rotate(-8.3deg);
+  75% {
+    transform: translate(-0.25px, 0.15px) rotate(-8.95deg);
   }
   100% {
     transform: translate(0px, 0px) rotate(-8.8deg);
@@ -234,7 +248,38 @@ a[class*="border-black"][class*="shadow-["]:active:not(:disabled) {
 }
 
 .splash-gun-vibrate {
-  animation: splash-gun-vibrate 210ms linear infinite;
-  transform-origin: 50% 58%;
+  animation: splash-gun-vibrate 1.3s ease-in-out infinite;
+  transform-origin: center center;
   will-change: transform;
+}
+
+.brand-mark__needle-letter {
+  position: relative;
+  display: inline-block;
+  margin-right: 2px;
+}
+
+.brand-mark__needle-letter::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 88%;
+  width: 2px;
+  height: 0.72em;
+  transform: translateX(-50%);
+  background: currentColor;
+  border-radius: 999px;
+}
+
+.brand-mark__needle-letter::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: calc(88% + 0.72em);
+  width: 0;
+  height: 0;
+  transform: translateX(-50%);
+  border-left: 0.1em solid transparent;
+  border-right: 0.1em solid transparent;
+  border-top: 0.18em solid currentColor;
 }

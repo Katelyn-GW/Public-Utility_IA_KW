@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useLayoutEffect, useCallback } from "react";
 import { useNavigate, useParams } from "react-router";
-import { Camera, Plus } from "lucide-react";
+import { Camera, Plus, RefreshCcw, Upload } from "lucide-react";
 import Header from "../components/Header";
 import { storage } from "../utils/storage";
 import { LibraryItem } from "../types/tattoo";
@@ -8,6 +8,26 @@ import { processImageForOverlay } from "../utils/imageProcessor";
 import TattooTransformOverlay, {
   TattooTransform,
 } from "../components/TattooTransformOverlay";
+import type { PlusTemplate } from "../utils/plusPatchTrack";
+import {
+  containerPointToVideoPixel,
+  extractTemplateFromTrackLuma,
+  matchTemplateInTrackLuma,
+  renderVideoTrackLuma,
+  trackPixelToVideoPixel,
+  videoPixelToContainerPoint,
+  videoPixelToTrackPixel,
+} from "../utils/plusPatchTrack";
+
+function snapTattooCenterToPoint(
+  t: TattooTransform,
+  px: number,
+  py: number
+): TattooTransform {
+  const cx = t.x + t.width / 2;
+  const cy = t.y + t.height / 2;
+  return { ...t, x: t.x + (px - cx), y: t.y + (py - cy) };
+}
 
 export default function ARCamera() {
   const navigate = useNavigate();
@@ -23,15 +43,59 @@ export default function ARCamera() {
   );
   const [tattooTransform, setTattooTransform] =
     useState<TattooTransform | null>(null);
+  const [tattooLocked, setTattooLocked] = useState(false);
   const [cameraActive, setCameraActive] = useState(false);
+  const [cameraFacing, setCameraFacing] = useState<"user" | "environment">(
+    "user"
+  );
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [mode, setMode] = useState<"camera" | "upload">("upload");
+  const [showDirections, setShowDirections] = useState(false);
+  /** One tap on the live view to mark where the physical + crosses on skin. */
+  const [plusCenterTapMode, setPlusCenterTapMode] = useState(false);
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const [processedTattooUrl, setProcessedTattooUrl] = useState<string | null>(
     null
   );
+  const tattooTransformRef = useRef<TattooTransform | null>(null);
+  const tattooLockedRef = useRef(false);
+  const modeRef = useRef(mode);
+  /** Locked-once tattoo size/rotation; x,y updated each frame from + patch match */
+  const plusLockedBodyRef = useRef<TattooTransform | null>(null);
+  const plusTemplateRef = useRef<PlusTemplate | null>(null);
+  /** Predicted + center in *downscaled track* pixel coordinates */
+  const plusCenterTrackRef = useRef<{ tx: number; ty: number } | null>(null);
+
+  useLayoutEffect(() => {
+    tattooTransformRef.current = tattooTransform;
+  }, [tattooTransform]);
+
+  useLayoutEffect(() => {
+    tattooLockedRef.current = tattooLocked;
+  }, [tattooLocked]);
+
+  useEffect(() => {
+    modeRef.current = mode;
+  }, [mode]);
+
+  // Desktop web is upload-only (no live camera option shown).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (window.innerWidth >= 768 && mode !== "upload") {
+      setMode("upload");
+      stopCamera();
+    }
+  }, [mode]);
+
+  useEffect(() => {
+    if (!tattooLocked) {
+      plusTemplateRef.current = null;
+      plusCenterTrackRef.current = null;
+      plusLockedBodyRef.current = null;
+    }
+  }, [tattooLocked]);
 
   useEffect(() => {
     const items = storage.getLibraryItems();
@@ -45,6 +109,12 @@ export default function ARCamera() {
     }
   }, [tattooId]);
 
+  useEffect(() => {
+    if (!tattooId && !selectedTattoo && libraryItems.length > 0) {
+      setSelectedTattoo(libraryItems[0]);
+    }
+  }, [tattooId, selectedTattoo, libraryItems]);
+
   // Process selected tattoo image to remove background
   useEffect(() => {
     if (selectedTattoo) {
@@ -57,17 +127,39 @@ export default function ARCamera() {
     }
   }, [selectedTattoo]);
 
-  const startCamera = async () => {
+  const dismissPlusTapMode = useCallback(() => {
+    setPlusCenterTapMode(false);
+  }, []);
+
+  const onPlusCenterPointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (!plusCenterTapMode || !cameraContainerRef.current) return;
+      e.preventDefault();
+      const rect = cameraContainerRef.current.getBoundingClientRect();
+      const px = e.clientX - rect.left;
+      const py = e.clientY - rect.top;
+      const t = tattooTransformRef.current;
+      if (t) {
+        setTattooTransform(snapTattooCenterToPoint(t, px, py));
+      }
+      setPlusCenterTapMode(false);
+    },
+    [plusCenterTapMode]
+  );
+
+  const startCamera = async (facingMode: "user" | "environment" = cameraFacing) => {
     setCameraError(null);
     try {
-      const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user" },
-      });
-      if (videoRef.current) {
-        videoRef.current.srcObject = mediaStream;
-        setStream(mediaStream);
-        setCameraActive(true);
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop());
       }
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: facingMode } },
+      });
+      setCameraFacing(facingMode);
+      setStream(mediaStream);
+      setCameraActive(true);
+      dismissPlusTapMode();
     } catch (error) {
       console.error("Error accessing camera:", error);
       let errorMessage = "Unable to access camera. ";
@@ -91,7 +183,13 @@ export default function ARCamera() {
     }
   };
 
+  const switchCamera = async () => {
+    const nextFacing = cameraFacing === "user" ? "environment" : "user";
+    await startCamera(nextFacing);
+  };
+
   const stopCamera = () => {
+    dismissPlusTapMode();
     if (stream) {
       stream.getTracks().forEach((track) => track.stop());
       setStream(null);
@@ -262,12 +360,362 @@ export default function ARCamera() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!stream || !videoRef.current) return;
+
+    videoRef.current.srcObject = stream;
+    void videoRef.current.play().catch(() => {
+      // Safari can reject autoplay before the stream is fully ready; retry after next frame.
+      requestAnimationFrame(() => {
+        void videoRef.current?.play().catch(() => {});
+      });
+    });
+  }, [stream, cameraActive]);
+
+  // While locked: template-match a small luminance patch from the lock frame so the tattoo follows the drawn + on skin.
+  useEffect(() => {
+    if (!cameraActive || !tattooLocked) return;
+
+    const container = cameraContainerRef.current;
+    if (!container) return () => {};
+
+    plusTemplateRef.current = null;
+    plusCenterTrackRef.current = null;
+    plusLockedBodyRef.current = null;
+
+    const canvas = document.createElement("canvas");
+    canvas.setAttribute("aria-hidden", "true");
+    canvas.width = 128;
+    canvas.height = 128;
+    Object.assign(canvas.style, {
+      position: "absolute",
+      left: "0",
+      top: "0",
+      width: "128px",
+      height: "128px",
+      opacity: "0",
+      pointerEvents: "none",
+      zIndex: "35",
+    });
+    container.appendChild(canvas);
+
+    let cancelled = false;
+    let raf = 0;
+    let vfcHandle: number | null = null;
+
+    const runOne = () => {
+      if (cancelled) return;
+
+      const desktop =
+        typeof window !== "undefined" && window.innerWidth >= 768;
+      if (desktop && modeRef.current !== "camera") {
+        return;
+      }
+
+      const video = videoRef.current;
+      const container = cameraContainerRef.current;
+      const cur = tattooTransformRef.current;
+
+      if (
+        !video ||
+        !container ||
+        !cur ||
+        !tattooLockedRef.current ||
+        video.readyState < 2
+      ) {
+        return;
+      }
+
+      const cx = cur.x + cur.width / 2;
+      const cy = cur.y + cur.height / 2;
+
+      const frame = renderVideoTrackLuma(video, canvas);
+      if (!frame) return;
+      const { luma, trkW, trkH, vw, vh } = frame;
+
+      if (!plusTemplateRef.current) {
+        const vp = containerPointToVideoPixel(video, container, cx, cy);
+        if (!vp) return;
+        const { tx, ty } = videoPixelToTrackPixel(vp, vw, vh, trkW, trkH);
+        const tpl = extractTemplateFromTrackLuma(luma, trkW, trkH, tx, ty);
+        if (!tpl) return;
+        plusTemplateRef.current = tpl;
+        plusCenterTrackRef.current = { tx, ty };
+        plusLockedBodyRef.current = { ...cur };
+        return;
+      }
+
+      const pred = plusCenterTrackRef.current;
+      const body = plusLockedBodyRef.current;
+      if (!pred || !body) return;
+
+      const tpl = plusTemplateRef.current;
+      if (!tpl) return;
+
+      const match = matchTemplateInTrackLuma(
+        luma,
+        trkW,
+        trkH,
+        tpl,
+        pred.tx,
+        pred.ty
+      );
+      if (!match) return;
+
+      const prevV = trackPixelToVideoPixel(pred.tx, pred.ty, vw, vh, trkW, trkH);
+      const nextV = trackPixelToVideoPixel(match.tx, match.ty, vw, vh, trkW, trkH);
+      const prevC = videoPixelToContainerPoint(
+        video,
+        container,
+        prevV.vx,
+        prevV.vy
+      );
+      const cpt = videoPixelToContainerPoint(
+        video,
+        container,
+        nextV.vx,
+        nextV.vy
+      );
+      if (!prevC || !cpt) return;
+
+      const dCont = Math.hypot(cpt.x - prevC.x, cpt.y - prevC.y);
+      if (dCont > 110) {
+        return;
+      }
+
+      plusCenterTrackRef.current = { tx: match.tx, ty: match.ty };
+
+      setTattooTransform({
+        ...body,
+        x: cpt.x - body.width / 2,
+        y: cpt.y - body.height / 2,
+      });
+    };
+
+    const continueLoop = () => {
+      if (cancelled) return;
+      const video = videoRef.current;
+      if (video && typeof video.requestVideoFrameCallback === "function") {
+        vfcHandle = video.requestVideoFrameCallback(onVideoFrame);
+      } else {
+        raf = requestAnimationFrame(rafLoop);
+      }
+    };
+
+    const rafLoop = () => {
+      if (cancelled) return;
+      runOne();
+      continueLoop();
+    };
+
+    const onVideoFrame: VideoFrameRequestCallback = () => {
+      if (cancelled) return;
+      runOne();
+      continueLoop();
+    };
+
+    continueLoop();
+
+    return () => {
+      cancelled = true;
+      const v = videoRef.current;
+      if (v && vfcHandle != null && typeof v.cancelVideoFrameCallback === "function") {
+        try {
+          v.cancelVideoFrameCallback(vfcHandle);
+        } catch {
+          /* ignore */
+        }
+      }
+      cancelAnimationFrame(raf);
+      canvas.remove();
+    };
+  }, [cameraActive, tattooLocked]);
+
   return (
-    <div className="min-h-screen bg-[#8dd7ca] pb-12">
-      <Header title="AR Camera" bannerImage="ar" />
+    <div className="min-h-screen bg-black pb-28 text-white md:pb-12 md:pl-[7.25rem]">
+      <Header title="AR Camera" />
 
       <div className="mx-auto max-w-5xl px-4 mt-6">
-        <div className="flex gap-6">
+        {/* Mobile layout */}
+        <div className="md:hidden">
+          <div className="mb-3 flex gap-3">
+            <button
+              onClick={() => navigate("/library")}
+              className="flex-1 rounded-lg border border-white bg-black py-2.5 font-['Fugaz_One:Regular',sans-serif] text-white shadow-[2px_4px_0px_0px_rgba(255,255,255,0.25)]"
+            >
+              Close
+            </button>
+            <button
+              onClick={() => setShowDirections((prev) => !prev)}
+              className="flex-1 rounded-lg border border-white bg-white py-2.5 font-['Fugaz_One:Regular',sans-serif] text-black shadow-[2px_4px_0px_0px_rgba(255,255,255,0.25)]"
+            >
+              Directions
+            </button>
+          </div>
+
+          {selectedTattoo && (
+            <div className="mb-3 rounded-lg border border-white/80 bg-black p-2">
+              <p className="mb-2 text-center text-xs font-['Fugaz_One:Regular',sans-serif] text-white/70">
+                Selected Tattoo
+              </p>
+              <div className="flex items-center gap-3">
+                <img
+                  src={selectedTattoo.imageUrl}
+                  alt={selectedTattoo.title}
+                  className="h-14 w-14 rounded-md border border-white bg-black object-cover"
+                />
+                <p className="flex-1 truncate text-sm font-['Fugaz_One:Regular',sans-serif]">
+                  {selectedTattoo.title}
+                </p>
+                <button
+                  onClick={() => navigate("/library")}
+                  className="rounded-md border border-white bg-white px-2 py-1 text-xs font-['Fugaz_One:Regular',sans-serif] text-black"
+                >
+                  Change
+                </button>
+              </div>
+            </div>
+          )}
+
+          {showDirections && (
+            <div className="mb-3 rounded-lg border border-white/80 bg-black p-3 text-sm">
+              <ul className="list-disc space-y-2 pl-4 font-['Fugaz_One:Regular',sans-serif]">
+                <li>Select a tattoo and start the camera.</li>
+                <li>
+                  Draw the placement square on screen, then drag and resize the
+                  tattoo like any other crop.
+                </li>
+                <li>
+                  With a skin-safe marker, draw a <strong>bold + on your arm</strong>{" "}
+                  where you want the ink to sit. The app does not draw that for
+                  you—it should be on your skin.
+                </li>
+                <li>
+                  Use <strong>Mark + crossing on skin</strong>, then tap once on
+                  the camera where the two lines cross. That lines the tattoo up
+                  with your +. You can still nudge the crop afterward.
+                </li>
+                <li>
+                  Tap the lock check on the crop square to lock — the PNG tracks
+                  the ink under your + (same patch of video each frame). Unlock
+                  to edit again, then save.
+                </li>
+              </ul>
+            </div>
+          )}
+
+          {cameraError && (
+            <div className="mb-3 rounded-lg border-2 border-orange-600 bg-orange-100 p-3">
+              <p className="text-sm text-orange-900">{cameraError}</p>
+            </div>
+          )}
+
+          {cameraActive &&
+            tattooTransform &&
+            !tattooLocked &&
+            processedTattooUrl &&
+            selectedTattoo && (
+              <div className="mb-2 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    plusCenterTapMode
+                      ? dismissPlusTapMode()
+                      : setPlusCenterTapMode(true)
+                  }
+                  className="rounded-lg border border-white bg-white px-3 py-2 text-xs font-['Fugaz_One:Regular',sans-serif] text-black shadow-[2px_3px_0px_0px_rgba(255,255,255,0.25)]"
+                >
+                  {plusCenterTapMode
+                    ? "Cancel"
+                    : "Mark + crossing on skin"}
+                </button>
+              </div>
+            )}
+
+          <div className="relative overflow-hidden rounded-lg border border-white bg-black shadow-[6px_6px_0px_0px_rgba(255,255,255,0.12)]">
+            {cameraActive && (
+              <button
+                onClick={switchCamera}
+                className="absolute right-3 top-3 z-30 rounded-full border border-white bg-black p-2 text-white shadow-[2px_3px_0px_0px_rgba(255,255,255,0.25)]"
+                title="Switch camera"
+                aria-label="Switch camera"
+              >
+                <RefreshCcw className="h-4 w-4" />
+              </button>
+            )}
+            {!cameraActive ? (
+              <div className="flex h-[62vh] max-h-[620px] min-h-[420px] items-center justify-center">
+                <button
+                  onClick={() => startCamera(cameraFacing)}
+                  disabled={!selectedTattoo}
+                  className="rounded-lg border border-white bg-white px-8 py-4 font-['Fugaz_One:Regular',sans-serif] text-black shadow-[2px_4px_0px_0px_rgba(255,255,255,0.25)] disabled:opacity-50"
+                >
+                  <Camera className="mx-auto mb-2 h-8 w-8" />
+                  {selectedTattoo ? "Start Camera" : "Add Tattoo In Library First"}
+                </button>
+              </div>
+            ) : (
+              <div className="relative h-[62vh] max-h-[620px] min-h-[420px] touch-none" ref={cameraContainerRef}>
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="h-full w-full object-cover touch-none"
+                />
+                {plusCenterTapMode && tattooTransform && (
+                  <>
+                    <div className="pointer-events-none absolute left-2 right-2 top-12 z-[26] rounded-lg border border-white bg-white/95 px-2 py-2 text-center text-xs font-['Fugaz_One:Regular',sans-serif] text-black shadow-md">
+                      Tap once where the lines of your <strong>+</strong> cross on
+                      your skin (the real marker, not the on-screen crop box).
+                    </div>
+                    <div
+                      className="absolute inset-0 z-[25] cursor-crosshair touch-none"
+                      onPointerDown={onPlusCenterPointerDown}
+                    />
+                  </>
+                )}
+                {processedTattooUrl && selectedTattoo && (
+                  <TattooTransformOverlay
+                    processedTattooUrl={processedTattooUrl}
+                    containerRef={cameraContainerRef}
+                    transform={tattooTransform}
+                    onTransformChange={setTattooTransform}
+                    onInitialPlace={setTattooTransform}
+                    locked={tattooLocked}
+                    onToggleLock={() => setTattooLocked((prev) => !prev)}
+                  />
+                )}
+              </div>
+            )}
+            <canvas ref={canvasRef} className="hidden" />
+          </div>
+
+          {cameraActive && (
+            <div className="mt-3 flex gap-3">
+              <button
+                onClick={() => {
+                  dismissPlusTapMode();
+                  setTattooTransform(null);
+                  setTattooLocked(false);
+                }}
+                className="flex-1 rounded-lg border border-white bg-black py-2.5 font-['Fugaz_One:Regular',sans-serif] text-white shadow-[2px_4px_0px_0px_rgba(255,255,255,0.25)]"
+              >
+                Reset
+              </button>
+              <button
+                onClick={capturePhoto}
+                disabled={!tattooTransform}
+                className="flex-1 rounded-lg border border-white bg-white py-2.5 font-['Fugaz_One:Regular',sans-serif] text-black shadow-[2px_4px_0px_0px_rgba(255,255,255,0.25)] disabled:opacity-50"
+              >
+                Save Photo
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Desktop layout */}
+        <div className="hidden gap-6 md:flex">
           {/* Tattoo Selection Sidebar */}
           <div className="w-48 flex-shrink-0">
             <h3 className="mb-3 font-['Fugaz_One:Regular',sans-serif] text-lg">
@@ -278,13 +726,15 @@ export default function ARCamera() {
                 <button
                   key={item.id}
                   onClick={() => {
+                    dismissPlusTapMode();
                     setSelectedTattoo(item);
                     setTattooTransform(null);
+                    setTattooLocked(false);
                   }}
-                  className={`w-full overflow-hidden rounded-lg border-4 transition-all ${
+                  className={`w-full overflow-hidden rounded-lg border-2 transition-all ${
                     selectedTattoo?.id === item.id
-                      ? "border-[#028a7b] shadow-[4px_4px_0px_0px_rgba(2,138,123,1)]"
-                      : "border-[#72aea3]"
+                      ? "border-white shadow-[4px_4px_0px_0px_rgba(255,255,255,0.35)]"
+                      : "border-white/30"
                   }`}
                 >
                   <img
@@ -292,7 +742,7 @@ export default function ARCamera() {
                     alt={item.title}
                     className="h-auto w-full object-cover"
                   />
-                  <div className="bg-[#028a7b] p-1">
+                  <div className="border-t border-white/40 bg-black p-1">
                     <Plus className="mx-auto h-4 w-4 text-white" />
                   </div>
                 </button>
@@ -302,35 +752,19 @@ export default function ARCamera() {
 
           {/* Camera View */}
           <div className="flex-1">
-            {/* Mode Toggle */}
-            <div className="mb-4 flex gap-4">
-              <button
-                onClick={() => {
-                  setMode("camera");
-                  setUploadedImage(null);
-                  setTattooTransform(null);
-                }}
-                className={`flex-1 rounded-lg border-2 border-black py-3 font-['Fugaz_One:Regular',sans-serif] shadow-[2px_4px_0px_0px_rgba(0,0,0,1)] ${
-                  mode === "camera"
-                    ? "bg-[#028a7b] text-white"
-                    : "bg-[#ead3b2]"
-                }`}
-              >
-                📷 Live Camera
-              </button>
+            {/* Desktop web: upload-only */}
+            <div className="mb-4">
               <button
                 onClick={() => {
                   setMode("upload");
                   stopCamera();
                   setTattooTransform(null);
+                  setTattooLocked(false);
                 }}
-                className={`flex-1 rounded-lg border-2 border-black py-3 font-['Fugaz_One:Regular',sans-serif] shadow-[2px_4px_0px_0px_rgba(0,0,0,1)] ${
-                  mode === "upload"
-                    ? "bg-[#028a7b] text-white"
-                    : "bg-[#ead3b2]"
-                }`}
+                className="flex w-full items-center justify-center gap-2 rounded-lg border border-white bg-white py-3 font-['Fugaz_One:Regular',sans-serif] text-black shadow-[2px_4px_0px_0px_rgba(255,255,255,0.25)]"
               >
-                📁 Upload Photo
+                <Upload className="h-4 w-4" />
+                Upload Photo
               </button>
             </div>
 
@@ -348,25 +782,48 @@ export default function ARCamera() {
                     setCameraError(null);
                     setMode("upload");
                   }}
-                  className="rounded-lg border-2 border-black bg-white px-4 py-2 text-sm font-['Fugaz_One:Regular',sans-serif] shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                  className="rounded-lg border border-white bg-white px-4 py-2 text-sm font-['Fugaz_One:Regular',sans-serif] text-black shadow-[2px_2px_0px_0px_rgba(255,255,255,0.25)]"
                 >
                   Switch to Upload Mode
                 </button>
               </div>
             )}
 
-            <div className="relative overflow-visible rounded-lg border-[11px] border-[#028a7b] bg-[#ead3b2] shadow-[8px_8px_0px_0px_rgba(0,0,0,0.3)]">
+            {mode === "camera" &&
+              cameraActive &&
+              tattooTransform &&
+              !tattooLocked &&
+              processedTattooUrl &&
+              selectedTattoo && (
+                <div className="mb-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      plusCenterTapMode
+                        ? dismissPlusTapMode()
+                        : setPlusCenterTapMode(true)
+                    }
+                    className="rounded-lg border border-white bg-white px-4 py-2 text-sm font-['Fugaz_One:Regular',sans-serif] text-black shadow-[2px_3px_0px_0px_rgba(255,255,255,0.25)]"
+                  >
+                    {plusCenterTapMode
+                      ? "Cancel"
+                      : "Mark + crossing on skin"}
+                  </button>
+                </div>
+              )}
+
+            <div className="relative overflow-visible rounded-lg border border-white bg-black shadow-[8px_8px_0px_0px_rgba(255,255,255,0.12)]">
               {mode === "camera" && !cameraActive && (
                 <div className="flex h-[600px] items-center justify-center">
                   <button
                     onClick={startCamera}
                     disabled={!selectedTattoo}
-                    className="rounded-lg border-2 border-black bg-[#028a7b] px-8 py-4 font-['Fugaz_One:Regular',sans-serif] text-white shadow-[2px_4px_0px_0px_rgba(0,0,0,1)] disabled:opacity-50"
+                    className="rounded-lg border border-white bg-white px-8 py-4 font-sans text-black shadow-[2px_4px_0px_0px_rgba(255,255,255,0.25)] disabled:opacity-50"
                   >
                     <Camera className="mx-auto mb-2 h-8 w-8" />
                     {selectedTattoo
                       ? "Start Camera"
-                      : "Select a Tattoo First"}
+                      : "Select a tattoo first"}
                   </button>
                 </div>
               )}
@@ -379,6 +836,18 @@ export default function ARCamera() {
                     playsInline
                     className="h-auto w-full"
                   />
+                  {plusCenterTapMode && tattooTransform && (
+                    <>
+                      <div className="pointer-events-none absolute left-2 right-2 top-14 z-[26] rounded-lg border border-white bg-white/95 px-3 py-2 text-center text-xs font-['Fugaz_One:Regular',sans-serif] text-black shadow-md">
+                        Tap once where your <strong>+</strong> crosses on your
+                        skin (the real marker, not the on-screen crop box).
+                      </div>
+                      <div
+                        className="absolute inset-0 z-[25] cursor-crosshair touch-none"
+                        onPointerDown={onPlusCenterPointerDown}
+                      />
+                    </>
+                  )}
                   {processedTattooUrl && selectedTattoo && (
                     <TattooTransformOverlay
                       processedTattooUrl={processedTattooUrl}
@@ -386,6 +855,8 @@ export default function ARCamera() {
                       transform={tattooTransform}
                       onTransformChange={setTattooTransform}
                       onInitialPlace={setTattooTransform}
+                      locked={tattooLocked}
+                      onToggleLock={() => setTattooLocked((prev) => !prev)}
                     />
                   )}
                   <p className="absolute left-1/2 top-4 -translate-x-1/2 rounded-lg bg-black/70 px-4 py-2 text-sm text-white pointer-events-none z-30">
@@ -408,12 +879,13 @@ export default function ARCamera() {
                   <button
                     onClick={() => uploadInputRef.current?.click()}
                     disabled={!selectedTattoo}
-                    className="rounded-lg border-2 border-black bg-[#028a7b] px-8 py-4 font-['Fugaz_One:Regular',sans-serif] text-white shadow-[2px_4px_0px_0px_rgba(0,0,0,1)] disabled:opacity-50"
+                    className="flex items-center gap-2 rounded-lg border border-white bg-white px-8 py-4 font-['Fugaz_One:Regular',sans-serif] text-black shadow-[2px_4px_0px_0px_rgba(255,255,255,0.25)] disabled:opacity-50"
                   >
-                    📁 Choose Photo
+                    <Upload className="h-4 w-4" />
+                    Choose Photo
                   </button>
                   {!selectedTattoo && (
-                    <p className="text-sm text-black/60">
+                    <p className="text-sm font-sans font-semibold text-white/60">
                       Select a tattoo first
                     </p>
                   )}
@@ -434,6 +906,8 @@ export default function ARCamera() {
                       transform={tattooTransform}
                       onTransformChange={setTattooTransform}
                       onInitialPlace={setTattooTransform}
+                      locked={tattooLocked}
+                      onToggleLock={() => setTattooLocked((prev) => !prev)}
                     />
                   )}
                   <p className="absolute left-1/2 top-4 -translate-x-1/2 rounded-lg bg-black/70 px-4 py-2 text-sm text-white pointer-events-none z-30">
@@ -451,22 +925,26 @@ export default function ARCamera() {
             <div className="mt-4 flex gap-4">
               <button
                 onClick={() => navigate("/library")}
-                className="flex-1 rounded-lg border-2 border-black bg-[#ead3b2] py-3 font-['Fugaz_One:Regular',sans-serif] shadow-[2px_4px_0px_0px_rgba(0,0,0,1)]"
+                className="flex-1 rounded-lg border border-white bg-black py-3 font-['Fugaz_One:Regular',sans-serif] text-white shadow-[2px_4px_0px_0px_rgba(255,255,255,0.25)]"
               >
                 Close
               </button>
               {mode === "camera" && cameraActive && (
                 <>
                   <button
-                    onClick={() => setTattooTransform(null)}
-                    className="flex-1 rounded-lg border-2 border-black bg-[#72aea3] py-3 font-['Fugaz_One:Regular',sans-serif] shadow-[2px_4px_0px_0px_rgba(0,0,0,1)]"
+                    onClick={() => {
+                      dismissPlusTapMode();
+                      setTattooTransform(null);
+                      setTattooLocked(false);
+                    }}
+                    className="flex-1 rounded-lg border border-white bg-black py-3 font-['Fugaz_One:Regular',sans-serif] text-white shadow-[2px_4px_0px_0px_rgba(255,255,255,0.25)]"
                   >
                     Reset Position
                   </button>
                   <button
                     onClick={capturePhoto}
                     disabled={!tattooTransform}
-                    className="flex-1 rounded-lg border-2 border-black bg-[#028a7b] py-3 font-['Fugaz_One:Regular',sans-serif] text-white shadow-[2px_4px_0px_0px_rgba(0,0,0,1)] disabled:opacity-50"
+                    className="flex-1 rounded-lg border border-white bg-white py-3 font-['Fugaz_One:Regular',sans-serif] text-black shadow-[2px_4px_0px_0px_rgba(255,255,255,0.25)] disabled:opacity-50"
                   >
                     Save Photo
                   </button>
@@ -475,15 +953,19 @@ export default function ARCamera() {
               {mode === "upload" && uploadedImage && (
                 <>
                   <button
-                    onClick={() => setTattooTransform(null)}
-                    className="flex-1 rounded-lg border-2 border-black bg-[#72aea3] py-3 font-['Fugaz_One:Regular',sans-serif] shadow-[2px_4px_0px_0px_rgba(0,0,0,1)]"
+                    onClick={() => {
+                      dismissPlusTapMode();
+                      setTattooTransform(null);
+                      setTattooLocked(false);
+                    }}
+                    className="flex-1 rounded-lg border border-white bg-black py-3 font-['Fugaz_One:Regular',sans-serif] text-white shadow-[2px_4px_0px_0px_rgba(255,255,255,0.25)]"
                   >
                     Reset Position
                   </button>
                   <button
                     onClick={captureUploadedPhoto}
                     disabled={!tattooTransform}
-                    className="flex-1 rounded-lg border-2 border-black bg-[#028a7b] py-3 font-['Fugaz_One:Regular',sans-serif] text-white shadow-[2px_4px_0px_0px_rgba(0,0,0,1)] disabled:opacity-50"
+                    className="flex-1 rounded-lg border border-white bg-white py-3 font-['Fugaz_One:Regular',sans-serif] text-black shadow-[2px_4px_0px_0px_rgba(255,255,255,0.25)] disabled:opacity-50"
                   >
                     Save Photo
                   </button>
@@ -492,32 +974,19 @@ export default function ARCamera() {
             </div>
 
             {/* Instructions */}
-            <div className="mt-4 rounded-lg border-2 border-black bg-[#ead3b2] p-4">
-              <h4 className="mb-2 font-['Fugaz_One:Regular',sans-serif]">
+            <div className="mt-4 rounded-lg border border-white/80 bg-black p-4">
+              <h4 className="mb-2 font-sans font-semibold">
                 How to use:
               </h4>
-              <ol className="list-decimal space-y-1 pl-5 text-sm">
-                <li>Select a tattoo from your library</li>
-                <li>
-                  Choose between Live Camera or Upload Photo mode
-                </li>
-                <li>
-                  Click and drag to draw a rectangle where you want the tattoo
-                </li>
-                <li>
-                  Drag the tattoo to reposition · drag corners to resize · use
-                  the top handle to rotate
-                </li>
-                <li>
-                  Use the flip buttons below the tattoo to mirror it
-                </li>
-                <li>
-                  Click "Save Photo" to capture and save to your library
-                </li>
+              <ol className="list-decimal space-y-1 pl-5 text-sm font-sans font-semibold leading-relaxed">
+                <li>Select a tattoo.</li>
+                <li>Upload your photo.</li>
+                <li>Place it: drag to move, corners to resize, top handle to rotate.</li>
+                <li>Tap Save Photo.</li>
               </ol>
               {mode === "camera" && (
-                <p className="mt-3 text-xs text-black/70">
-                  💡 If camera doesn't work, try "Upload Photo" mode!
+                <p className="mt-3 text-xs text-white/70">
+                  💡 If camera does not work, try Upload Photo mode!
                 </p>
               )}
             </div>
