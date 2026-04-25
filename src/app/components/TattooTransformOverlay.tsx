@@ -233,8 +233,8 @@ export default function TattooTransformOverlay({
       ctx.save();
       ctx.translate(w / 2, h / 2);
       drawCylinderWrappedImage(ctx, img, w, h, {
-        strength: 0.24,
-        slices: 64,
+        strength: 0.32,
+        slices: 72,
         flipX: transform.flipX,
         flipY: transform.flipY,
         alpha: 0.92,

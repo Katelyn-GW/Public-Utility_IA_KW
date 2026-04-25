@@ -11,7 +11,7 @@ export const drawCylinderWrappedImage = (
     alpha?: number;
   }
 ) => {
-  const strength = options?.strength ?? 0.2;
+  const strength = options?.strength ?? 0.32;
   const slices = options?.slices ?? 56;
   const flipX = options?.flipX ?? false;
   const flipY = options?.flipY ?? false;
@@ -60,6 +60,19 @@ export const drawCylinderWrappedImage = (
     );
     dx += dw;
   }
+
+  // Subtle edge darkening + center lift to enhance cylindrical perception.
+  const edgeShade = Math.min(0.22, 0.12 + strength * 0.32);
+  const edgeGrad = ctx.createLinearGradient(-width / 2, 0, width / 2, 0);
+  edgeGrad.addColorStop(0, `rgba(0,0,0,${edgeShade})`);
+  edgeGrad.addColorStop(0.18, "rgba(0,0,0,0)");
+  edgeGrad.addColorStop(0.5, "rgba(255,255,255,0.06)");
+  edgeGrad.addColorStop(0.82, "rgba(0,0,0,0)");
+  edgeGrad.addColorStop(1, `rgba(0,0,0,${edgeShade})`);
+  ctx.globalCompositeOperation = "multiply";
+  ctx.fillStyle = edgeGrad;
+  ctx.fillRect(-width / 2, -height / 2, width, height);
+  ctx.globalCompositeOperation = "source-over";
 
   ctx.restore();
 };
