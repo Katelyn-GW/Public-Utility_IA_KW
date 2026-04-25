@@ -12,7 +12,9 @@ import type { PlusTemplate } from "../utils/plusPatchTrack";
 import {
   containerPointToVideoPixel,
   extractTemplateFromTrackLuma,
+  matchTemplateGlobalCoarse,
   matchTemplateInTrackLuma,
+  matchTemplateInTrackLumaWithConfig,
   renderVideoTrackLuma,
   trackPixelToVideoPixel,
   videoPixelToContainerPoint,
@@ -67,6 +69,7 @@ export default function ARCamera() {
   const plusTemplateRef = useRef<PlusTemplate | null>(null);
   /** Predicted + center in *downscaled track* pixel coordinates */
   const plusCenterTrackRef = useRef<{ tx: number; ty: number } | null>(null);
+  const trackVelocityRef = useRef<{ vx: number; vy: number }>({ vx: 0, vy: 0 });
   const [isMobileView, setIsMobileView] = useState(
     typeof window !== "undefined" ? window.innerWidth < 768 : false
   );
@@ -105,6 +108,7 @@ export default function ARCamera() {
       plusTemplateRef.current = null;
       plusCenterTrackRef.current = null;
       plusLockedBodyRef.current = null;
+      trackVelocityRef.current = { vx: 0, vy: 0 };
     }
   }, [tattooLocked]);
 
@@ -474,16 +478,61 @@ export default function ARCamera() {
       const tpl = plusTemplateRef.current;
       if (!tpl) return;
 
-      const match = matchTemplateInTrackLuma(
+      const vel = trackVelocityRef.current;
+      const predictedTx = pred.tx + vel.vx;
+      const predictedTy = pred.ty + vel.vy;
+
+      let match = matchTemplateInTrackLuma(
         luma,
         trkW,
         trkH,
         tpl,
-        pred.tx,
-        pred.ty
+        predictedTx,
+        predictedTy
       );
-      if (!match) return;
+      if (!match) {
+        // Wider local search first before full-frame reacquire.
+        match = matchTemplateInTrackLumaWithConfig(
+          luma,
+          trkW,
+          trkH,
+          tpl,
+          predictedTx,
+          predictedTy,
+          72,
+          4
+        );
+        if (!match) {
+          missStreak += 1;
+          if (missStreak >= 2) {
+            const globalMatch = matchTemplateGlobalCoarse(luma, trkW, trkH, tpl);
+            if (globalMatch && globalMatch.score >= 0.08) {
+              match = globalMatch;
+            } else {
+              return;
+            }
+          } else {
+            return;
+          }
+        }
+      }
       if (match.score < 0.075) {
+        // One more wider local attempt for weak correlations.
+        const boosted = matchTemplateInTrackLumaWithConfig(
+          luma,
+          trkW,
+          trkH,
+          tpl,
+          predictedTx,
+          predictedTy,
+          84,
+          4
+        );
+        if (boosted && boosted.score > match.score) {
+          match = boosted;
+        }
+      }
+      if (match.score < 0.07) {
         missStreak += 1;
         if (missStreak >= 4) {
           const active = tattooTransformRef.current;
@@ -507,12 +556,16 @@ export default function ARCamera() {
                 plusTemplateRef.current = rebuilt;
                 plusCenterTrackRef.current = { tx: tp.tx, ty: tp.ty };
                 plusLockedBodyRef.current = { ...active };
+                trackVelocityRef.current = { vx: 0, vy: 0 };
               }
             }
           }
           missStreak = 0;
         }
         return;
+      }
+      {
+        // continue
       }
       missStreak = 0;
 
@@ -534,7 +587,7 @@ export default function ARCamera() {
 
       const dCont = Math.hypot(cpt.x - prevC.x, cpt.y - prevC.y);
       // Don't hard-break on fast motion; clamp max frame-to-frame movement.
-      const maxStep = 95;
+      const maxStep = 120;
       let nextContainerX = cpt.x;
       let nextContainerY = cpt.y;
       if (dCont > maxStep) {
@@ -544,6 +597,10 @@ export default function ARCamera() {
       }
 
       plusCenterTrackRef.current = { tx: match.tx, ty: match.ty };
+      trackVelocityRef.current = {
+        vx: (match.tx - pred.tx) * 0.72 + vel.vx * 0.28,
+        vy: (match.ty - pred.ty) * 0.72 + vel.vy * 0.28,
+      };
 
       const nextX = nextContainerX - body.width / 2;
       const nextY = nextContainerY - body.height / 2;
@@ -552,10 +609,10 @@ export default function ARCamera() {
       if (!prev) return;
 
       // Throttle + smooth to reduce mobile lag/jitter.
-      if (now - lastUpdate < 16) return;
+      if (now - lastUpdate < 14) return;
       lastUpdate = now;
 
-      const lerp = 0.66;
+      const lerp = 0.74;
       const smoothedX = prev.x + (nextX - prev.x) * lerp;
       const smoothedY = prev.y + (nextY - prev.y) * lerp;
       const moveDelta = Math.hypot(smoothedX - prev.x, smoothedY - prev.y);

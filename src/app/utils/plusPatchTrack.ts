@@ -306,8 +306,30 @@ export function matchTemplateInTrackLuma(
   predTx: number,
   predTy: number
 ): MatchResult | null {
-  const roiW = PATCH_TRK + 2 * SEARCH_PAD_TRK;
-  const roiH = PATCH_TRK + 2 * SEARCH_PAD_TRK;
+  return matchTemplateInTrackLumaWithConfig(
+    luma,
+    trkW,
+    trkH,
+    template,
+    predTx,
+    predTy,
+    SEARCH_PAD_TRK,
+    SEARCH_STEP
+  );
+}
+
+export function matchTemplateInTrackLumaWithConfig(
+  luma: Float32Array,
+  trkW: number,
+  trkH: number,
+  template: PlusTemplate,
+  predTx: number,
+  predTy: number,
+  searchPadTrk: number,
+  searchStep: number
+): MatchResult | null {
+  const roiW = PATCH_TRK + 2 * searchPadTrk;
+  const roiH = PATCH_TRK + 2 * searchPadTrk;
   let sx = Math.round(predTx) - Math.floor(roiW / 2);
   let sy = Math.round(predTy) - Math.floor(roiH / 2);
   sx = Math.max(0, Math.min(sx, trkW - roiW));
@@ -328,8 +350,8 @@ export function matchTemplateInTrackLuma(
   const maxTx = roiW - template.tw;
   const maxTy = roiH - template.th;
 
-  for (let ty = 0; ty <= maxTy; ty += SEARCH_STEP) {
-    for (let tx = 0; tx <= maxTx; tx += SEARCH_STEP) {
+  for (let ty = 0; ty <= maxTy; ty += searchStep) {
+    for (let tx = 0; tx <= maxTx; tx += searchStep) {
       const s = znccAt(
         big,
         roiW,
@@ -378,4 +400,79 @@ export function matchTemplateInTrackLuma(
   const centerTx = sx + bestTx + (template.tw - 1) / 2;
   const centerTy = sy + bestTy + (template.th - 1) / 2;
   return { tx: centerTx, ty: centerTy, score: best };
+}
+
+/**
+ * Coarse global search for recovery when local tracking loses lock.
+ * Scans the full downscaled track frame at a coarse step, then refines locally.
+ */
+export function matchTemplateGlobalCoarse(
+  luma: Float32Array,
+  trkW: number,
+  trkH: number,
+  template: PlusTemplate
+): MatchResult | null {
+  const tw = template.tw;
+  const th = template.th;
+  const maxTx = trkW - tw;
+  const maxTy = trkH - th;
+  if (maxTx < 0 || maxTy < 0) return null;
+
+  let best = -Infinity;
+  let bestTx = 0;
+  let bestTy = 0;
+  const coarseStep = 8;
+
+  for (let ty = 0; ty <= maxTy; ty += coarseStep) {
+    for (let tx = 0; tx <= maxTx; tx += coarseStep) {
+      const s = znccAt(
+        luma,
+        trkW,
+        tx,
+        ty,
+        template.z,
+        template.invT,
+        tw,
+        th,
+        scratchWin
+      );
+      if (s > best) {
+        best = s;
+        bestTx = tx;
+        bestTy = ty;
+      }
+    }
+  }
+
+  // Fine refine around coarse winner.
+  for (let dy = -10; dy <= 10; dy++) {
+    for (let dx = -10; dx <= 10; dx++) {
+      const tx = bestTx + dx;
+      const ty = bestTy + dy;
+      if (tx < 0 || ty < 0 || tx > maxTx || ty > maxTy) continue;
+      const s = znccAt(
+        luma,
+        trkW,
+        tx,
+        ty,
+        template.z,
+        template.invT,
+        tw,
+        th,
+        scratchWin
+      );
+      if (s > best) {
+        best = s;
+        bestTx = tx;
+        bestTy = ty;
+      }
+    }
+  }
+
+  if (!Number.isFinite(best)) return null;
+  return {
+    tx: bestTx + (tw - 1) / 2,
+    ty: bestTy + (th - 1) / 2,
+    score: best,
+  };
 }
