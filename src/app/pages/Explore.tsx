@@ -239,11 +239,11 @@ export default function Explore() {
             <span className="rounded-full border border-white/40 bg-white px-3 py-1 text-xs font-['Fugaz_One:Regular',sans-serif] text-black shadow-[2px_2px_0px_0px_rgba(255,255,255,0.25)]">
               Are.na
             </span>
-            <span className="text-sm font-sans font-semibold text-white/70">
+            <span className="celestial-muted text-sm font-sans font-semibold text-white/70">
               Channel: <strong>{channelTitle}</strong>
             </span>
             {(analyzing || analyzeProgress) && (
-              <span className="flex items-center gap-1 rounded-full border border-white/25 bg-neutral-950 px-3 py-1 text-xs font-['Fugaz_One:Regular',sans-serif] text-white shadow-[2px_2px_0px_0px_rgba(255,255,255,0.15)]">
+              <span className="celestial-chip flex items-center gap-1 rounded-full border border-white/25 bg-neutral-950 px-3 py-1 text-xs font-['Fugaz_One:Regular',sans-serif] text-white shadow-[2px_2px_0px_0px_rgba(255,255,255,0.15)]">
                 {analyzing && <Loader2 className="h-3 w-3 animate-spin" />}
                 {!analyzing && <Sparkles className="h-3 w-3" />}
                 {analyzeProgress}
@@ -306,7 +306,7 @@ export default function Explore() {
 
           {showFilters && (
             <div className="rounded-lg border border-white/20 bg-neutral-950 p-4 shadow-[4px_4px_0px_0px_rgba(255,255,255,0.12)]">
-              <h3 className="mb-3 font-['Fugaz_One:Regular',sans-serif] text-lg">Keywords</h3>
+              <h3 className="celestial-label mb-3 font-['Fugaz_One:Regular',sans-serif] text-lg">Keywords</h3>
               <div className="mb-4 flex flex-wrap gap-2">
                 {filters.keywords.map((keyword) => (
                   <button
@@ -314,8 +314,8 @@ export default function Explore() {
                     onClick={() => toggleFilter(keyword)}
                     className={`rounded-full border border-white/25 px-3 py-1 text-sm font-['Fugaz_One:Regular',sans-serif] ${
                       selectedFilters.includes(keyword)
-                        ? "bg-white text-black"
-                        : "bg-black text-white"
+                        ? "celestial-chip--active bg-white text-black"
+                        : "celestial-chip bg-black text-white"
                     }`}
                   >
                     {keyword} {selectedFilters.includes(keyword) && "\u00d7"}
@@ -325,7 +325,7 @@ export default function Explore() {
 
               <div className="grid gap-4 md:grid-cols-3">
                 <div>
-                  <h3 className="mb-2 font-['Fugaz_One:Regular',sans-serif] text-lg">Label</h3>
+                  <h3 className="celestial-label mb-2 font-['Fugaz_One:Regular',sans-serif] text-lg">Label</h3>
                   <div className="space-y-2">
                     {filters.labels.map((label) => (
                       <label key={label} className="flex items-center gap-2 font-sans">
@@ -342,7 +342,7 @@ export default function Explore() {
                 </div>
 
                 <div>
-                  <h3 className="mb-2 font-['Fugaz_One:Regular',sans-serif] text-lg">Color</h3>
+                  <h3 className="celestial-label mb-2 font-['Fugaz_One:Regular',sans-serif] text-lg">Color</h3>
                   <div className="space-y-2">
                     {filters.colors.map((color) => (
                       <label key={color} className="flex items-center gap-2 font-sans">
@@ -359,7 +359,7 @@ export default function Explore() {
                 </div>
 
                 <div>
-                  <h3 className="mb-2 font-['Fugaz_One:Regular',sans-serif] text-lg">Size</h3>
+                  <h3 className="celestial-label mb-2 font-['Fugaz_One:Regular',sans-serif] text-lg">Size</h3>
                   <div className="space-y-2">
                     {filters.sizes.map((size) => (
                       <label key={size} className="flex items-center gap-2">
@@ -382,12 +382,12 @@ export default function Explore() {
         {/* Active Filters */}
         {selectedFilters.length > 0 && (
           <div className="mb-4 flex flex-wrap items-center gap-2">
-            <span className="text-sm font-['Fugaz_One:Regular',sans-serif] text-white/80">Active:</span>
+            <span className="celestial-label text-sm font-['Fugaz_One:Regular',sans-serif] text-white/80">Active:</span>
             {selectedFilters.map((filter) => (
               <button
                 key={filter}
                 onClick={() => toggleFilter(filter)}
-                className="rounded-full border border-white/30 bg-white px-3 py-1 text-xs font-['Fugaz_One:Regular',sans-serif] text-black"
+                className="celestial-chip--active rounded-full border border-white/30 bg-white px-3 py-1 text-xs font-['Fugaz_One:Regular',sans-serif] text-black"
               >
                 {filter} &times;
               </button>
@@ -447,7 +447,7 @@ export default function Explore() {
                       )}
                     </div>
                     <div className="border-t border-white/15 bg-black p-2">
-                      <p className="font-['Fugaz_One:Regular',sans-serif] text-sm text-white truncate">
+                <p className="celestial-body font-['Fugaz_One:Regular',sans-serif] text-sm text-white truncate">
                         {tattoo.title}
                       </p>
                     </div>
@@ -503,7 +503,7 @@ export default function Explore() {
                   <Sparkles className="inline h-3 w-3 mr-1" />
                   AI Description
                 </p>
-                <p className="text-sm text-white/80">{currentSelectedTattoo.description}</p>
+                <p className="celestial-muted text-sm text-white/80">{currentSelectedTattoo.description}</p>
               </div>
             )}
 

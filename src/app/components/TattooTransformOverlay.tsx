@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { FlipHorizontal2, FlipVertical2, RotateCcw } from "lucide-react";
+import { Check, FlipHorizontal2, FlipVertical2, RotateCcw } from "lucide-react";
+import { drawCylinderWrappedImage } from "../utils/cylinderWrap";
 
 export interface TattooTransform {
   x: number;
@@ -17,6 +18,9 @@ interface Props {
   transform: TattooTransform | null;
   onTransformChange: (t: TattooTransform) => void;
   onInitialPlace: (t: TattooTransform) => void;
+  locked?: boolean;
+  onToggleLock?: () => void;
+  cylinderWrap?: boolean;
 }
 
 type HandleType =
@@ -37,6 +41,9 @@ export default function TattooTransformOverlay({
   transform,
   onTransformChange,
   onInitialPlace,
+  locked = false,
+  onToggleLock,
+  cylinderWrap = false,
 }: Props) {
   const [drawing, setDrawing] = useState(false);
   const [drawStart, setDrawStart] = useState<{ x: number; y: number } | null>(null);
@@ -105,12 +112,12 @@ export default function TattooTransformOverlay({
     (e: React.MouseEvent | React.TouchEvent, handle: HandleType) => {
       e.stopPropagation();
       e.preventDefault();
-      if (!transform) return;
+      if (!transform || locked) return;
       const pos = getPointerPos(e as any);
       dragStartRef.current = { mx: pos.x, my: pos.y, t: { ...transform } };
       setDragging(handle);
     },
-    [transform, getPointerPos]
+    [transform, getPointerPos, locked]
   );
 
   useEffect(() => {
@@ -118,7 +125,7 @@ export default function TattooTransformOverlay({
 
     const handleMove = (e: MouseEvent | TouchEvent) => {
       e.preventDefault();
-      if (!dragStartRef.current || !transform) return;
+      if (!dragStartRef.current || !transform || locked) return;
       const pos = getPointerPos(e);
       const dx = pos.x - dragStartRef.current.mx;
       const dy = pos.y - dragStartRef.current.my;
@@ -188,14 +195,42 @@ export default function TattooTransformOverlay({
       window.removeEventListener("touchmove", handleMove);
       window.removeEventListener("touchend", handleUp);
     };
-  }, [dragging, transform, getPointerPos, onTransformChange]);
+  }, [dragging, transform, getPointerPos, onTransformChange, locked]);
 
   const handleSize = 12;
   const handleClass =
-    "absolute bg-white border-2 border-[#028a7b] rounded-sm z-10";
+    "absolute bg-black border border-white rounded-sm z-10";
 
   // Draw preview line while drawing initial rect
   const [currentDraw, setCurrentDraw] = useState<{ x: number; y: number } | null>(null);
+  const wrappedCanvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    if (!cylinderWrap || !transform || !wrappedCanvasRef.current) return;
+
+    const canvas = wrappedCanvasRef.current;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const w = Math.max(1, Math.round(transform.width));
+    const h = Math.max(1, Math.round(transform.height));
+    if (canvas.width !== w) canvas.width = w;
+    if (canvas.height !== h) canvas.height = h;
+
+    const img = new Image();
+    img.onload = () => {
+      ctx.clearRect(0, 0, w, h);
+      ctx.save();
+      ctx.translate(w / 2, h / 2);
+      drawCylinderWrappedImage(ctx, img, w, h, {
+        flipX: transform.flipX,
+        flipY: transform.flipY,
+        alpha: 0.9,
+      });
+      ctx.restore();
+    };
+    img.src = processedTattooUrl;
+  }, [cylinderWrap, processedTattooUrl, transform]);
 
   const handleDrawMove = useCallback(
     (e: React.MouseEvent | React.TouchEvent) => {
@@ -211,7 +246,7 @@ export default function TattooTransformOverlay({
       {/* Drawing layer - for initial placement */}
       {!transform && (
         <div
-          className="absolute inset-0 z-20 cursor-crosshair"
+          className="absolute inset-0 z-20 cursor-crosshair touch-none select-none"
           onMouseDown={handlePointerDown}
           onMouseMove={handleDrawMove}
           onMouseUp={handlePointerUp}
@@ -221,7 +256,7 @@ export default function TattooTransformOverlay({
         >
           {drawing && drawStart && currentDraw && (
             <div
-              className="absolute border-2 border-dashed border-[#028a7b] bg-[#028a7b]/10"
+              className="absolute border border-dashed border-white bg-white/10"
               style={{
                 left: Math.min(drawStart.x, currentDraw.x),
                 top: Math.min(drawStart.y, currentDraw.y),
@@ -233,147 +268,198 @@ export default function TattooTransformOverlay({
         </div>
       )}
 
-      {/* Transform overlay */}
+      {/* Transform overlay: outer = unrotated box so lock control stays upright and visible */}
       {transform && (
         <div
-          className="absolute z-20"
+          className={`absolute z-20 touch-none select-none overflow-visible ${
+            locked ? "will-change-transform" : ""
+          }`}
           style={{
             left: transform.x,
             top: transform.y,
             width: transform.width,
             height: transform.height,
-            transform: `rotate(${transform.rotation}deg)`,
-            transformOrigin: "center center",
           }}
         >
-          {/* Tattoo image */}
-          <img
-            src={processedTattooUrl}
-            alt="Tattoo overlay"
-            className="pointer-events-none absolute inset-0 h-full w-full"
+          <div
+            className="absolute inset-0 touch-none"
             style={{
-              opacity: 0.9,
-              transform: `scaleX(${transform.flipX ? -1 : 1}) scaleY(${transform.flipY ? -1 : 1})`,
+              transform: `rotate(${transform.rotation}deg)`,
+              transformOrigin: "center center",
             }}
-            draggable={false}
-          />
-
-          {/* Bounding box */}
-          <div className="absolute inset-0 border-2 border-[#028a7b]" />
-
-          {/* Move handle (center area) */}
-          <div
-            className="absolute inset-3 cursor-move z-10"
-            onMouseDown={(e) => startDrag(e, "move")}
-            onTouchStart={(e) => startDrag(e, "move")}
-          />
-
-          {/* Corner resize handles */}
-          {(["nw", "ne", "sw", "se"] as HandleType[]).map((corner) => (
-            <div
-              key={corner}
-              className={handleClass}
-              style={{
-                width: handleSize,
-                height: handleSize,
-                cursor:
-                  corner === "nw" || corner === "se"
-                    ? "nwse-resize"
-                    : "nesw-resize",
-                top: corner.includes("n") ? -handleSize / 2 : undefined,
-                bottom: corner.includes("s") ? -handleSize / 2 : undefined,
-                left: corner.includes("w") ? -handleSize / 2 : undefined,
-                right: corner.includes("e") ? -handleSize / 2 : undefined,
-              }}
-              onMouseDown={(e) => startDrag(e, corner)}
-              onTouchStart={(e) => startDrag(e, corner)}
-            />
-          ))}
-
-          {/* Edge resize handles */}
-          {(["n", "s", "e", "w"] as HandleType[]).map((edge) => (
-            <div
-              key={edge}
-              className={handleClass}
-              style={{
-                width: edge === "n" || edge === "s" ? handleSize : handleSize,
-                height: edge === "e" || edge === "w" ? handleSize : handleSize,
-                cursor:
-                  edge === "n" || edge === "s" ? "ns-resize" : "ew-resize",
-                top:
-                  edge === "n"
-                    ? -handleSize / 2
-                    : edge === "s"
-                    ? undefined
-                    : "50%",
-                bottom: edge === "s" ? -handleSize / 2 : undefined,
-                left:
-                  edge === "w"
-                    ? -handleSize / 2
-                    : edge === "e"
-                    ? undefined
-                    : "50%",
-                right: edge === "e" ? -handleSize / 2 : undefined,
-                transform:
-                  edge === "n" || edge === "s"
-                    ? "translateX(-50%)"
-                    : "translateY(-50%)",
-              }}
-              onMouseDown={(e) => startDrag(e, edge)}
-              onTouchStart={(e) => startDrag(e, edge)}
-            />
-          ))}
-
-          {/* Rotate handle - line + circle above top center */}
-          <div
-            className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center"
-            style={{ top: -40 }}
           >
-            <div
-              className="w-6 h-6 rounded-full bg-[#028a7b] border-2 border-white cursor-grab flex items-center justify-center shadow-md"
-              onMouseDown={(e) => startDrag(e, "rotate")}
-              onTouchStart={(e) => startDrag(e, "rotate")}
-            >
-              <RotateCcw className="h-3 w-3 text-white" />
-            </div>
-            <div className="w-0.5 h-3 bg-[#028a7b]" />
-          </div>
+            {/* Tattoo image */}
+            {cylinderWrap ? (
+              <canvas
+                ref={wrappedCanvasRef}
+                className="pointer-events-none absolute inset-0 h-full w-full"
+              />
+            ) : (
+              <img
+                src={processedTattooUrl}
+                alt="Tattoo overlay"
+                className="pointer-events-none absolute inset-0 h-full w-full"
+                style={{
+                  opacity: 0.9,
+                  transform: `scaleX(${transform.flipX ? -1 : 1}) scaleY(${transform.flipY ? -1 : 1})`,
+                }}
+                draggable={false}
+              />
+            )}
 
-          {/* Flip buttons - positioned below */}
-          <div
-            className="absolute left-1/2 -translate-x-1/2 flex gap-2"
-            style={{ bottom: -44 }}
-          >
-            <button
-              className={`w-8 h-8 rounded-full border-2 flex items-center justify-center shadow-md ${
-                transform.flipX
-                  ? "bg-[#028a7b] border-white text-white"
-                  : "bg-white border-[#028a7b] text-[#028a7b]"
+            {/* Bounding box */}
+            <div
+              className={`pointer-events-none absolute inset-0 border ${
+                locked ? "border-white/70 border-dashed" : "border-white"
               }`}
-              onMouseDown={(e) => e.stopPropagation()}
-              onClick={(e) => {
-                e.stopPropagation();
-                onTransformChange({ ...transform, flipX: !transform.flipX });
-              }}
-              title="Flip Horizontal"
-            >
-              <FlipHorizontal2 className="h-4 w-4" />
-            </button>
-            <button
-              className={`w-8 h-8 rounded-full border-2 flex items-center justify-center shadow-md ${
-                transform.flipY
-                  ? "bg-[#028a7b] border-white text-white"
-                  : "bg-white border-[#028a7b] text-[#028a7b]"
-              }`}
-              onMouseDown={(e) => e.stopPropagation()}
-              onClick={(e) => {
-                e.stopPropagation();
-                onTransformChange({ ...transform, flipY: !transform.flipY });
-              }}
-              title="Flip Vertical"
-            >
-              <FlipVertical2 className="h-4 w-4" />
-            </button>
+            />
+
+            {/* Lock: inside rotated layer so it stays on the crop square's top-right corner */}
+            {onToggleLock && (
+              <button
+                type="button"
+                className={`absolute right-0 top-0 z-[40] flex h-8 w-8 translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-white bg-black shadow-md ${
+                  locked ? "ring-1 ring-white/40" : "opacity-95"
+                }`}
+                onMouseDown={(e) => e.stopPropagation()}
+                onTouchStart={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleLock();
+                }}
+                title={
+                  locked
+                    ? "Unlock to move or resize"
+                    : "Lock — tattoo tracks the + patch under the crop (stay in good light)"
+                }
+                aria-pressed={locked}
+              >
+                <Check className="h-3.5 w-3.5 text-white" strokeWidth={2.5} />
+              </button>
+            )}
+
+            {/* Move handle (center area) */}
+            {!locked && (
+              <div
+                className="absolute inset-3 cursor-move z-10"
+                onMouseDown={(e) => startDrag(e, "move")}
+                onTouchStart={(e) => startDrag(e, "move")}
+              />
+            )}
+
+            {/* Corner resize handles */}
+            {!locked &&
+              (["nw", "ne", "sw", "se"] as HandleType[]).map((corner) => (
+                <div
+                  key={corner}
+                  className={handleClass}
+                  style={{
+                    width: handleSize,
+                    height: handleSize,
+                    cursor:
+                      corner === "nw" || corner === "se"
+                        ? "nwse-resize"
+                        : "nesw-resize",
+                    top: corner.includes("n") ? -handleSize / 2 : undefined,
+                    bottom: corner.includes("s") ? -handleSize / 2 : undefined,
+                    left: corner.includes("w") ? -handleSize / 2 : undefined,
+                    right: corner.includes("e") ? -handleSize / 2 : undefined,
+                  }}
+                  onMouseDown={(e) => startDrag(e, corner)}
+                  onTouchStart={(e) => startDrag(e, corner)}
+                />
+              ))}
+
+            {/* Edge resize handles */}
+            {!locked &&
+              (["n", "s", "e", "w"] as HandleType[]).map((edge) => (
+                <div
+                  key={edge}
+                  className={handleClass}
+                  style={{
+                    width: edge === "n" || edge === "s" ? handleSize : handleSize,
+                    height: edge === "e" || edge === "w" ? handleSize : handleSize,
+                    cursor:
+                      edge === "n" || edge === "s" ? "ns-resize" : "ew-resize",
+                    top:
+                      edge === "n"
+                        ? -handleSize / 2
+                        : edge === "s"
+                          ? undefined
+                          : "50%",
+                    bottom: edge === "s" ? -handleSize / 2 : undefined,
+                    left:
+                      edge === "w"
+                        ? -handleSize / 2
+                        : edge === "e"
+                          ? undefined
+                          : "50%",
+                    right: edge === "e" ? -handleSize / 2 : undefined,
+                    transform:
+                      edge === "n" || edge === "s"
+                        ? "translateX(-50%)"
+                        : "translateY(-50%)",
+                  }}
+                  onMouseDown={(e) => startDrag(e, edge)}
+                  onTouchStart={(e) => startDrag(e, edge)}
+                />
+              ))}
+
+            {/* Rotate handle - line + circle above top center */}
+            {!locked && (
+              <div
+                className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center"
+                style={{ top: -40 }}
+              >
+                <div
+                  className="flex h-6 w-6 cursor-grab items-center justify-center rounded-full border border-white bg-black shadow-md"
+                  onMouseDown={(e) => startDrag(e, "rotate")}
+                  onTouchStart={(e) => startDrag(e, "rotate")}
+                >
+                  <RotateCcw className="h-3 w-3 text-white" />
+                </div>
+                <div className="h-3 w-0.5 bg-white" />
+              </div>
+            )}
+
+            {/* Flip buttons - positioned below */}
+            {!locked && (
+              <div
+                className="absolute left-1/2 flex -translate-x-1/2 gap-2"
+                style={{ bottom: -44 }}
+              >
+                <button
+                  className={`flex h-8 w-8 items-center justify-center rounded-full border shadow-md ${
+                    transform.flipX
+                      ? "border-white bg-white text-black"
+                      : "border-white bg-black text-white"
+                  }`}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onTransformChange({ ...transform, flipX: !transform.flipX });
+                  }}
+                  title="Flip Horizontal"
+                >
+                  <FlipHorizontal2 className="h-4 w-4" />
+                </button>
+                <button
+                  className={`flex h-8 w-8 items-center justify-center rounded-full border shadow-md ${
+                    transform.flipY
+                      ? "border-white bg-white text-black"
+                      : "border-white bg-black text-white"
+                  }`}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onTransformChange({ ...transform, flipY: !transform.flipY });
+                  }}
+                  title="Flip Vertical"
+                >
+                  <FlipVertical2 className="h-4 w-4" />
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

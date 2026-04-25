@@ -163,7 +163,7 @@ export default function Library() {
           <div>
             {libraryItems.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20">
-                <p className="mb-4 font-sans text-xl font-semibold text-white/60">
+                <p className="celestial-muted mb-4 font-sans text-xl font-semibold text-white/60">
                   No saved tattoos yet
                 </p>
                 <button
@@ -190,11 +190,11 @@ export default function Library() {
                         />
                       </div>
                       <div className="border-t border-white/15 bg-black p-2">
-                        <p className="font-['Fugaz_One:Regular',sans-serif] text-sm text-white">
+                        <p className="celestial-body font-['Fugaz_One:Regular',sans-serif] text-sm text-white">
                           {item.title}
                         </p>
                         {item.savedDescription && (
-                          <p className="mt-1 text-xs text-white/90">
+                          <p className="celestial-muted mt-1 text-xs text-white/90">
                             {item.savedDescription}
                           </p>
                         )}
@@ -226,7 +226,7 @@ export default function Library() {
           <div>
             {arPhotos.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20">
-                <p className="mb-4 font-sans text-xl font-semibold text-white/60">
+                <p className="celestial-muted mb-4 font-sans text-xl font-semibold text-white/60">
                   No AR photos yet
                 </p>
                 <button
@@ -251,10 +251,10 @@ export default function Library() {
                         className="h-auto w-full object-cover"
                       />
                       <div className="border-t border-white/15 bg-black p-2">
-                        <p className="font-['Fugaz_One:Regular',sans-serif] text-sm text-white">
+                        <p className="celestial-body font-['Fugaz_One:Regular',sans-serif] text-sm text-white">
                           {photo.title || photo.tattooTitle}
                         </p>
-                        <p className="text-xs text-white/80">
+                        <p className="celestial-muted text-xs text-white/80">
                           {new Date(photo.createdAt).toLocaleDateString()}
                         </p>
                       </div>
@@ -287,7 +287,7 @@ export default function Library() {
                 className="h-48 w-full object-cover"
               />
             </div>
-            <h2 className="mb-2 font-['Fugaz_One:Regular',sans-serif] text-xl text-white">
+            <h2 className="celestial-label mb-2 font-['Fugaz_One:Regular',sans-serif] text-xl text-white">
               {selectedItem.title}
             </h2>
             <textarea
@@ -363,7 +363,7 @@ export default function Library() {
             />
 
             {/* Date */}
-            <p className="mb-4 text-sm text-white/60">
+            <p className="celestial-muted mb-4 text-sm text-white/60">
               Captured on{" "}
               {new Date(selectedARPhoto.createdAt).toLocaleDateString("en-US", {
                 month: "long",
@@ -423,7 +423,7 @@ export default function Library() {
             </div>
 
             {/* Info note about posting */}
-            <p className="mt-3 text-center text-xs text-white/50">
+            <p className="celestial-muted mt-3 text-center text-xs text-white/50">
               Posting shares the <strong>tattoo design</strong> (not your AR
               photo) so others can try it in AR too.
             </p>

@@ -1,4 +1,5 @@
 import { Link, useLocation } from "react-router";
+import rabbitSubmark from "../../assets/submark-rabbit.png";
 
 interface HeaderProps {
   title?: string;
@@ -104,20 +105,20 @@ export default function Header({ title }: HeaderProps) {
             aria-label="Open splash screen"
             className="flex h-[5.5rem] w-[5.5rem] items-center justify-center rounded-md p-1 outline-none ring-white/30 focus-visible:ring-2 active:opacity-90"
           >
-            <span
+            <img
+              src={rabbitSubmark}
+              alt=""
               aria-hidden="true"
-              className="select-none text-white text-6xl leading-none"
-              style={{ fontFamily: '"Pirata One", serif' }}
-            >
-              i
-            </span>
+              className="h-full w-full object-contain select-none"
+              draggable={false}
+            />
           </Link>
         </div>
 
         {/* Plain Pirata title (no image banner/frame). */}
         <div className="flex items-center justify-center px-4 pt-4 pb-3">
           <h2
-            className="text-center text-white text-4xl sm:text-5xl"
+            className="celestial-heading text-center text-4xl sm:text-5xl tracking-wide"
             style={{ fontFamily: '"Pirata One", serif' }}
           >
             {title || "Public Library"}
@@ -132,7 +133,7 @@ export default function Header({ title }: HeaderProps) {
                 key={item.to}
                 to={item.to}
                 className={`flex min-w-[56px] items-center justify-center gap-2 rounded-full border-2 border-white bg-white px-3 py-1.5 text-black shadow-[2px_4px_0px_0px_rgba(255,255,255,0.35)] transition-colors ${
-                  item.isActive ? "brightness-110" : ""
+                  item.isActive ? "brightness-110 scale-[1.03]" : ""
                 }`}
               >
                 <span className="text-black">
@@ -155,13 +156,13 @@ export default function Header({ title }: HeaderProps) {
             aria-label="Open splash screen"
             className="mb-2 flex h-[6.5rem] w-[6.5rem] shrink-0 items-center justify-center rounded-md p-1 outline-none ring-white/30 focus-visible:ring-2 active:opacity-90"
           >
-            <span
+            <img
+              src={rabbitSubmark}
+              alt=""
               aria-hidden="true"
-              className="select-none text-white text-7xl leading-none"
-              style={{ fontFamily: '"Pirata One", serif' }}
-            >
-              i
-            </span>
+              className="h-full w-full object-contain select-none"
+              draggable={false}
+            />
           </Link>
           <nav className="flex min-h-0 flex-1 flex-col items-center justify-around py-2">
             {navItems.map((item) => (

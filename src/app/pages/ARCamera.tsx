@@ -18,6 +18,7 @@ import {
   videoPixelToContainerPoint,
   videoPixelToTrackPixel,
 } from "../utils/plusPatchTrack";
+import { drawCylinderWrappedImage } from "../utils/cylinderWrap";
 
 function snapTattooCenterToPoint(
   t: TattooTransform,
@@ -67,6 +68,17 @@ export default function ARCamera() {
   const plusTemplateRef = useRef<PlusTemplate | null>(null);
   /** Predicted + center in *downscaled track* pixel coordinates */
   const plusCenterTrackRef = useRef<{ tx: number; ty: number } | null>(null);
+  const [isMobileView, setIsMobileView] = useState(
+    typeof window !== "undefined" ? window.innerWidth < 768 : false
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onResize = () => setIsMobileView(window.innerWidth < 768);
+    onResize();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   useLayoutEffect(() => {
     tattooTransformRef.current = tattooTransform;
@@ -217,7 +229,8 @@ export default function ARCamera() {
     scaleX: number,
     scaleY: number,
     offsetX: number = 0,
-    offsetY: number = 0
+    offsetY: number = 0,
+    cylinderWrap: boolean = false
   ) => {
     const cx = (t.x - offsetX + t.width / 2) * scaleX;
     const cy = (t.y - offsetY + t.height / 2) * scaleY;
@@ -228,8 +241,16 @@ export default function ARCamera() {
     ctx.globalAlpha = 0.9;
     ctx.translate(cx, cy);
     ctx.rotate((t.rotation * Math.PI) / 180);
-    ctx.scale(t.flipX ? -1 : 1, t.flipY ? -1 : 1);
-    ctx.drawImage(tattooImg, -w / 2, -h / 2, w, h);
+    if (cylinderWrap) {
+      drawCylinderWrappedImage(ctx, tattooImg, w, h, {
+        flipX: t.flipX,
+        flipY: t.flipY,
+        alpha: 0.9,
+      });
+    } else {
+      ctx.scale(t.flipX ? -1 : 1, t.flipY ? -1 : 1);
+      ctx.drawImage(tattooImg, -w / 2, -h / 2, w, h);
+    }
     ctx.restore();
   };
 
@@ -292,7 +313,8 @@ export default function ARCamera() {
             scaleX,
             scaleY,
             offsetX,
-            offsetY
+            offsetY,
+            isMobileView
           );
           savePhoto(canvas.toDataURL("image/png"));
         };
@@ -329,7 +351,16 @@ export default function ARCamera() {
         const containerH = cameraContainerRef.current!.clientHeight;
         const scaleX = canvas.width / containerW;
         const scaleY = canvas.height / containerH;
-        drawTattooOnCanvas(ctx, tattooImg, tattooTransform, scaleX, scaleY);
+        drawTattooOnCanvas(
+          ctx,
+          tattooImg,
+          tattooTransform,
+          scaleX,
+          scaleY,
+          0,
+          0,
+          isMobileView
+        );
         savePhoto(canvas.toDataURL("image/png"));
       };
       tattooImg.src = processedTattooUrl;
@@ -374,7 +405,7 @@ export default function ARCamera() {
 
   // While locked: template-match a small luminance patch from the lock frame so the tattoo follows the drawn + on skin.
   useEffect(() => {
-    if (!cameraActive || !tattooLocked) return;
+    if (!cameraActive || !tattooLocked || isMobileView) return;
 
     const container = cameraContainerRef.current;
     if (!container) return () => {};
@@ -529,7 +560,7 @@ export default function ARCamera() {
       cancelAnimationFrame(raf);
       canvas.remove();
     };
-  }, [cameraActive, tattooLocked]);
+  }, [cameraActive, tattooLocked, isMobileView]);
 
   return (
     <div className="min-h-screen bg-black pb-28 text-white md:pb-12 md:pl-[7.25rem]">
@@ -585,21 +616,8 @@ export default function ARCamera() {
                   Draw the placement square on screen, then drag and resize the
                   tattoo like any other crop.
                 </li>
-                <li>
-                  With a skin-safe marker, draw a <strong>bold + on your arm</strong>{" "}
-                  where you want the ink to sit. The app does not draw that for
-                  you—it should be on your skin.
-                </li>
-                <li>
-                  Use <strong>Mark + crossing on skin</strong>, then tap once on
-                  the camera where the two lines cross. That lines the tattoo up
-                  with your +. You can still nudge the crop afterward.
-                </li>
-                <li>
-                  Tap the lock check on the crop square to lock — the PNG tracks
-                  the ink under your + (same patch of video each frame). Unlock
-                  to edit again, then save.
-                </li>
+                <li>Use the lock check when placement looks right.</li>
+                <li>Mobile uses a cylinder wrap to better follow arm curvature.</li>
               </ul>
             </div>
           )}
@@ -614,7 +632,8 @@ export default function ARCamera() {
             tattooTransform &&
             !tattooLocked &&
             processedTattooUrl &&
-            selectedTattoo && (
+            selectedTattoo &&
+            !isMobileView && (
               <div className="mb-2 flex flex-wrap gap-2">
                 <button
                   type="button"
@@ -663,7 +682,7 @@ export default function ARCamera() {
                   muted
                   className="h-full w-full object-cover touch-none"
                 />
-                {plusCenterTapMode && tattooTransform && (
+                {plusCenterTapMode && tattooTransform && !isMobileView && (
                   <>
                     <div className="pointer-events-none absolute left-2 right-2 top-12 z-[26] rounded-lg border border-white bg-white/95 px-2 py-2 text-center text-xs font-['Fugaz_One:Regular',sans-serif] text-black shadow-md">
                       Tap once where the lines of your <strong>+</strong> cross on
@@ -684,6 +703,7 @@ export default function ARCamera() {
                     onInitialPlace={setTattooTransform}
                     locked={tattooLocked}
                     onToggleLock={() => setTattooLocked((prev) => !prev)}
+                    cylinderWrap={isMobileView}
                   />
                 )}
               </div>
@@ -794,7 +814,8 @@ export default function ARCamera() {
               tattooTransform &&
               !tattooLocked &&
               processedTattooUrl &&
-              selectedTattoo && (
+              selectedTattoo &&
+              !isMobileView && (
                 <div className="mb-3 flex flex-wrap gap-2">
                   <button
                     type="button"
@@ -836,7 +857,7 @@ export default function ARCamera() {
                     playsInline
                     className="h-auto w-full"
                   />
-                  {plusCenterTapMode && tattooTransform && (
+                  {plusCenterTapMode && tattooTransform && !isMobileView && (
                     <>
                       <div className="pointer-events-none absolute left-2 right-2 top-14 z-[26] rounded-lg border border-white bg-white/95 px-3 py-2 text-center text-xs font-['Fugaz_One:Regular',sans-serif] text-black shadow-md">
                         Tap once where your <strong>+</strong> crosses on your
@@ -857,6 +878,7 @@ export default function ARCamera() {
                       onInitialPlace={setTattooTransform}
                       locked={tattooLocked}
                       onToggleLock={() => setTattooLocked((prev) => !prev)}
+                      cylinderWrap={isMobileView}
                     />
                   )}
                   <p className="absolute left-1/2 top-4 -translate-x-1/2 rounded-lg bg-black/70 px-4 py-2 text-sm text-white pointer-events-none z-30">
@@ -908,6 +930,7 @@ export default function ARCamera() {
                       onInitialPlace={setTattooTransform}
                       locked={tattooLocked}
                       onToggleLock={() => setTattooLocked((prev) => !prev)}
+                      cylinderWrap={isMobileView}
                     />
                   )}
                   <p className="absolute left-1/2 top-4 -translate-x-1/2 rounded-lg bg-black/70 px-4 py-2 text-sm text-white pointer-events-none z-30">
