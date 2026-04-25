@@ -12,7 +12,6 @@ import type { PlusTemplate } from "../utils/plusPatchTrack";
 import {
   containerPointToVideoPixel,
   extractTemplateFromTrackLuma,
-  matchTemplateGlobalCoarse,
   matchTemplateInTrackLuma,
   matchTemplateInTrackLumaWithConfig,
   renderVideoTrackLuma,
@@ -70,6 +69,7 @@ export default function ARCamera() {
   /** Predicted + center in *downscaled track* pixel coordinates */
   const plusCenterTrackRef = useRef<{ tx: number; ty: number } | null>(null);
   const trackVelocityRef = useRef<{ vx: number; vy: number }>({ vx: 0, vy: 0 });
+  const pendingTrackRef = useRef<{ tx: number; ty: number; frames: number } | null>(null);
   const [isMobileView, setIsMobileView] = useState(
     typeof window !== "undefined" ? window.innerWidth < 768 : false
   );
@@ -109,6 +109,7 @@ export default function ARCamera() {
       plusCenterTrackRef.current = null;
       plusLockedBodyRef.current = null;
       trackVelocityRef.current = { vx: 0, vy: 0 };
+      pendingTrackRef.current = null;
     }
   }, [tattooLocked]);
 
@@ -429,7 +430,6 @@ export default function ARCamera() {
     let lastUpdate = 0;
     let missStreak = 0;
     let highConfidenceStreak = 0;
-    let globalReacquireCooldown = 0;
     const runOne = () => {
       if (cancelled) return;
 
@@ -459,7 +459,6 @@ export default function ARCamera() {
       const frame = renderVideoTrackLuma(video, canvas);
       if (!frame) return;
       const { luma, trkW, trkH, vw, vh } = frame;
-      if (globalReacquireCooldown > 0) globalReacquireCooldown -= 1;
 
       if (!plusTemplateRef.current) {
         const vp = containerPointToVideoPixel(video, container, cx, cy);
@@ -504,20 +503,7 @@ export default function ARCamera() {
           72,
           4
         );
-        if (!match) {
-          missStreak += 1;
-          if (missStreak >= 2 && globalReacquireCooldown === 0) {
-            const globalMatch = matchTemplateGlobalCoarse(luma, trkW, trkH, tpl);
-            globalReacquireCooldown = 3;
-            if (globalMatch && globalMatch.score >= 0.08) {
-              match = globalMatch;
-            } else {
-              return;
-            }
-          } else {
-            return;
-          }
-        }
+        if (!match) return;
       }
       if (match.score < 0.075) {
         // One more wider local attempt for weak correlations.
@@ -589,6 +575,22 @@ export default function ARCamera() {
       if (!prevC || !cpt) return;
 
       const dCont = Math.hypot(cpt.x - prevC.x, cpt.y - prevC.y);
+      // Stability gate: for larger jumps, require repeated confirmation.
+      if (dCont > 28 && match.score < 0.17) {
+        const p = pendingTrackRef.current;
+        if (p && Math.hypot(p.tx - match.tx, p.ty - match.ty) < 10) {
+          p.frames += 1;
+          if (p.frames < 2) {
+            return;
+          }
+        } else {
+          pendingTrackRef.current = { tx: match.tx, ty: match.ty, frames: 1 };
+          return;
+        }
+      } else {
+        pendingTrackRef.current = null;
+      }
+
       // Don't hard-break on fast motion; clamp max frame-to-frame movement.
       const maxStep = 120;
       let nextContainerX = cpt.x;
