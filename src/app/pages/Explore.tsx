@@ -255,7 +255,8 @@ export default function Explore() {
         {/* Search, Filter, and Sort */}
         <div className="mb-6 space-y-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <div className="relative flex-1">
+            <div className="flex items-center gap-2 flex-1">
+              <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-white" />
               <input
                 type="text"
@@ -264,10 +265,22 @@ export default function Explore() {
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full rounded-full border border-white/25 bg-neutral-950 py-2 pl-10 pr-4 font-['Fugaz_One:Regular',sans-serif] text-white placeholder-white/45 focus:outline-none focus:ring-2 focus:ring-white/40"
               />
+              </div>
+              <button
+                onClick={() => setShowFilters((prev) => !prev)}
+                aria-label="Toggle filters"
+                className={`inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/25 shadow-[2px_2px_0px_0px_rgba(255,255,255,0.15)] md:hidden ${
+                  showFilters || selectedFilters.length > 0
+                    ? "bg-white text-black"
+                    : "bg-neutral-950 text-white"
+                }`}
+              >
+                <SlidersHorizontal className="h-4 w-4" />
+              </button>
             </div>
             <button
               onClick={() => setShowFilters((prev) => !prev)}
-              className={`inline-flex items-center gap-2 rounded-lg border border-white/25 px-4 py-2 font-['Fugaz_One:Regular',sans-serif] text-sm shadow-[2px_2px_0px_0px_rgba(255,255,255,0.15)] ${
+              className={`hidden md:inline-flex items-center gap-2 rounded-lg border border-white/25 px-4 py-2 font-['Fugaz_One:Regular',sans-serif] text-sm shadow-[2px_2px_0px_0px_rgba(255,255,255,0.15)] ${
                 showFilters || selectedFilters.length > 0
                   ? "bg-white text-black"
                   : "bg-neutral-950 text-white"

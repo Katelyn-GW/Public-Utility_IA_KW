@@ -98,8 +98,8 @@ export default function Header({ title }: HeaderProps) {
   return (
     <>
       <header className="relative bg-black">
-        {/* Submark — top-left (mobile); large tap target; PNG has extra canvas — bigger box + scale so the mark reads */}
-        <div className="absolute left-2 top-2 z-30 md:hidden">
+        {/* Submark — top-right (mobile) */}
+        <div className="absolute right-2 top-2 z-30 md:hidden">
           <Link
             to="/splash"
             aria-label="Open splash screen"
