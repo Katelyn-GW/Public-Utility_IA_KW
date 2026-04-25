@@ -70,6 +70,7 @@ export default function ARCamera() {
   const plusCenterTrackRef = useRef<{ tx: number; ty: number } | null>(null);
   const trackVelocityRef = useRef<{ vx: number; vy: number }>({ vx: 0, vy: 0 });
   const pendingTrackRef = useRef<{ tx: number; ty: number; frames: number } | null>(null);
+  const trackHistoryRef = useRef<Array<{ tx: number; ty: number }>>([]);
   const [isMobileView, setIsMobileView] = useState(
     typeof window !== "undefined" ? window.innerWidth < 768 : false
   );
@@ -110,6 +111,7 @@ export default function ARCamera() {
       plusLockedBodyRef.current = null;
       trackVelocityRef.current = { vx: 0, vy: 0 };
       pendingTrackRef.current = null;
+      trackHistoryRef.current = [];
     }
   }, [tattooLocked]);
 
@@ -607,20 +609,43 @@ export default function ARCamera() {
         vy: (match.ty - pred.ty) * 0.72 + vel.vy * 0.28,
       };
 
-      const nextX = nextContainerX - body.width / 2;
-      const nextY = nextContainerY - body.height / 2;
+      // Median filter on recent match centers to suppress sensor/compression jitter.
+      const hist = trackHistoryRef.current;
+      hist.push({ tx: match.tx, ty: match.ty });
+      if (hist.length > 5) hist.shift();
+      const sortedTx = hist.map((p) => p.tx).sort((a, b) => a - b);
+      const sortedTy = hist.map((p) => p.ty).sort((a, b) => a - b);
+      const mid = Math.floor(hist.length / 2);
+      const filteredTx = sortedTx[mid];
+      const filteredTy = sortedTy[mid];
+
       const prev = tattooTransformRef.current;
       const now = performance.now();
       if (!prev) return;
+
+      // Recompute from filtered tracker center for final placement.
+      const filteredV = trackPixelToVideoPixel(filteredTx, filteredTy, vw, vh, trkW, trkH);
+      const filteredC = videoPixelToContainerPoint(
+        video,
+        container,
+        filteredV.vx,
+        filteredV.vy
+      );
+      if (!filteredC) return;
+      const fNextX = filteredC.x - body.width / 2;
+      const fNextY = filteredC.y - body.height / 2;
 
       // Throttle + smooth to reduce mobile lag/jitter.
       if (now - lastUpdate < 20) return;
       lastUpdate = now;
 
       const confidence = Math.max(0, Math.min(1, (match.score - 0.08) / 0.22));
-      const lerp = 0.42 + confidence * 0.32;
-      const smoothedX = prev.x + (nextX - prev.x) * lerp;
-      const smoothedY = prev.y + (nextY - prev.y) * lerp;
+      const rawMove = Math.hypot(fNextX - prev.x, fNextY - prev.y);
+      // Deadzone: tiny movement from camera noise should not move tattoo.
+      if (rawMove < 1.8) return;
+      const lerp = (0.24 + confidence * 0.24) * (rawMove < 6 ? 0.6 : 1);
+      const smoothedX = prev.x + (fNextX - prev.x) * lerp;
+      const smoothedY = prev.y + (fNextY - prev.y) * lerp;
       const moveDelta = Math.hypot(smoothedX - prev.x, smoothedY - prev.y);
       if (moveDelta < 0.12) return;
 
