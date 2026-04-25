@@ -405,7 +405,7 @@ export default function ARCamera() {
 
   // While locked: template-match a small luminance patch from the lock frame so the tattoo follows the drawn + on skin.
   useEffect(() => {
-    if (!cameraActive || !tattooLocked || isMobileView) return;
+    if (!cameraActive || !tattooLocked) return;
 
     const container = cameraContainerRef.current;
     if (!container) return () => {};
@@ -434,6 +434,7 @@ export default function ARCamera() {
     let raf = 0;
     let vfcHandle: number | null = null;
 
+    let lastUpdate = 0;
     const runOne = () => {
       if (cancelled) return;
 
@@ -516,10 +517,26 @@ export default function ARCamera() {
 
       plusCenterTrackRef.current = { tx: match.tx, ty: match.ty };
 
+      const nextX = cpt.x - body.width / 2;
+      const nextY = cpt.y - body.height / 2;
+      const prev = tattooTransformRef.current;
+      const now = performance.now();
+      if (!prev) return;
+
+      // Throttle + smooth to reduce mobile lag/jitter.
+      if (now - lastUpdate < 28) return;
+      lastUpdate = now;
+
+      const lerp = 0.42;
+      const smoothedX = prev.x + (nextX - prev.x) * lerp;
+      const smoothedY = prev.y + (nextY - prev.y) * lerp;
+      const moveDelta = Math.hypot(smoothedX - prev.x, smoothedY - prev.y);
+      if (moveDelta < 0.35) return;
+
       setTattooTransform({
         ...body,
-        x: cpt.x - body.width / 2,
-        y: cpt.y - body.height / 2,
+        x: smoothedX,
+        y: smoothedY,
       });
     };
 
@@ -560,7 +577,7 @@ export default function ARCamera() {
       cancelAnimationFrame(raf);
       canvas.remove();
     };
-  }, [cameraActive, tattooLocked, isMobileView]);
+  }, [cameraActive, tattooLocked]);
 
   return (
     <div className="min-h-screen bg-black pb-28 text-white md:pb-12 md:pl-[7.25rem]">

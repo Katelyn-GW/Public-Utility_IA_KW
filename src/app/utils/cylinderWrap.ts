@@ -11,8 +11,8 @@ export const drawCylinderWrappedImage = (
     alpha?: number;
   }
 ) => {
-  const strength = options?.strength ?? 0.24;
-  const slices = options?.slices ?? 84;
+  const strength = options?.strength ?? 0.2;
+  const slices = options?.slices ?? 56;
   const flipX = options?.flipX ?? false;
   const flipY = options?.flipY ?? false;
   const alpha = options?.alpha ?? 0.9;
@@ -41,10 +41,12 @@ export const drawCylinderWrappedImage = (
   let dx = (-totalWidth / 2) * xSign;
   const dy = (-height / 2) * ySign;
   const sw = sourceW / slices;
+  const overlap = 0.8; // soft overlap between strips to avoid visible seams
 
   for (let i = 0; i < slices; i += 1) {
     const sx = i * sw;
     const dw = widths[i] * xSign;
+    const drawW = (Math.abs(dw) + overlap) * xSign;
     ctx.drawImage(
       img,
       sx,
@@ -53,7 +55,7 @@ export const drawCylinderWrappedImage = (
       sourceH,
       dx,
       dy,
-      dw,
+      drawW,
       height * ySign
     );
     dx += dw;

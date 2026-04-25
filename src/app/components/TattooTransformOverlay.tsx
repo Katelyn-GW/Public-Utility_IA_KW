@@ -212,20 +212,30 @@ export default function TattooTransformOverlay({
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
+    const dpr =
+      typeof window !== "undefined"
+        ? Math.min(2, window.devicePixelRatio || 1)
+        : 1;
     const w = Math.max(1, Math.round(transform.width));
     const h = Math.max(1, Math.round(transform.height));
-    if (canvas.width !== w) canvas.width = w;
-    if (canvas.height !== h) canvas.height = h;
+    if (canvas.width !== Math.round(w * dpr)) canvas.width = Math.round(w * dpr);
+    if (canvas.height !== Math.round(h * dpr)) canvas.height = Math.round(h * dpr);
+    canvas.style.width = `${w}px`;
+    canvas.style.height = `${h}px`;
 
     const img = new Image();
     img.onload = () => {
-      ctx.clearRect(0, 0, w, h);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.scale(dpr, dpr);
       ctx.save();
       ctx.translate(w / 2, h / 2);
       drawCylinderWrappedImage(ctx, img, w, h, {
         flipX: transform.flipX,
         flipY: transform.flipY,
-        alpha: 0.9,
+        alpha: 0.92,
       });
       ctx.restore();
     };
