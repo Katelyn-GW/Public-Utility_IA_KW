@@ -729,8 +729,12 @@ export default function ARCamera() {
               Close
             </button>
             <button
+              type="button"
+              aria-pressed={showDirections}
               onClick={() => setShowDirections((prev) => !prev)}
-              className="flex-1 rounded-lg border border-white bg-white py-2.5 font-['Fugaz_One:Regular',sans-serif] text-black shadow-[2px_4px_0px_0px_rgba(255,255,255,0.25)]"
+              className={`ar-mobile-directions-btn flex-1 rounded-lg border border-white/25 bg-black py-2.5 font-['Fugaz_One:Regular',sans-serif] text-white shadow-[2px_4px_0px_0px_rgba(255,255,255,0.25)] ${
+                showDirections ? "ar-mobile-directions-btn--open" : ""
+              }`}
             >
               Directions
             </button>
@@ -751,7 +755,8 @@ export default function ARCamera() {
                   {selectedTattoo.title}
                 </p>
                 <button
-                  onClick={() => navigate("/library")}
+                  type="button"
+                  onClick={() => navigate(`/library?arChange=1${selectedTattoo ? `&selected=${selectedTattoo.id}` : ""}`)}
                   className="rounded-md border border-white bg-white px-2 py-1 text-xs font-['Fugaz_One:Regular',sans-serif] text-black"
                 >
                   Change
@@ -762,15 +767,14 @@ export default function ARCamera() {
 
           {showDirections && (
             <div className="mb-3 rounded-lg border border-white/80 bg-black p-3 text-sm">
-              <ul className="list-disc space-y-2 pl-4 font-['Fugaz_One:Regular',sans-serif]">
+              <ol className="list-decimal space-y-2 pl-5 font-['Fugaz_One:Regular',sans-serif]">
                 <li>Select a tattoo and start the camera.</li>
                 <li>
                   Draw the placement square on screen, then drag and resize the
                   tattoo like any other crop.
                 </li>
                 <li>Use the lock check when placement looks right.</li>
-                <li>Mobile uses a cylinder wrap to better follow arm curvature.</li>
-              </ul>
+              </ol>
             </div>
           )}
 
@@ -1152,8 +1156,8 @@ export default function ARCamera() {
               </h4>
               <ol className="list-decimal space-y-1 pl-5 text-sm font-sans font-semibold leading-relaxed">
                 <li>Select a tattoo.</li>
-                <li>Upload your photo.</li>
-                <li>Place it: drag to move, corners to resize, top handle to rotate.</li>
+                <li>Upload image of body part.</li>
+                <li>Drag, resize, and rotate png</li>
                 <li>Tap Save Photo.</li>
               </ol>
               {mode === "camera" && (

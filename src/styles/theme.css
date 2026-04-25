@@ -347,17 +347,63 @@ a[class*="border-white"][class*="shadow-["]:active:not(:disabled) {
     0 10px 24px rgba(143, 98, 20, 0.28) !important;
 }
 
-.celestial-theme button[class*="bg-white"],
-.celestial-theme a[class*="bg-white"] {
+/* Match only the `bg-white` utility, not `active:bg-white` / `hover:bg-white` (substring false positives). */
+.celestial-theme button.bg-white,
+.celestial-theme a.bg-white {
   background: linear-gradient(150deg, #e1c079 0%, #c79c44 100%) !important;
   border-color: #d7b26a !important;
   color: #16110a !important;
 }
 
-.celestial-theme button[class*="bg-white"]:hover:not(:disabled),
-.celestial-theme a[class*="bg-white"]:hover:not(:disabled) {
+.celestial-theme button.bg-white:hover:not(:disabled),
+.celestial-theme a.bg-white:hover:not(:disabled) {
   background: linear-gradient(150deg, #e8cb8c 0%, #d2a851 100%) !important;
   box-shadow: 0 0 0 1px rgba(228, 191, 115, 0.4), 0 8px 20px rgba(118, 82, 20, 0.38) !important;
+}
+
+/* Library tattoo edit modal: black actions until pressed or keyboard-focused, then gold. */
+.celestial-theme .library-edit-actions > button {
+  background: #060608 !important;
+  background-image: none !important;
+  color: #f4ede1 !important;
+}
+
+.celestial-theme .library-edit-actions > button:hover:not(:disabled) {
+  background-color: rgba(20, 16, 27, 0.98) !important;
+}
+
+.celestial-theme .library-edit-actions > button:active:not(:disabled),
+.celestial-theme .library-edit-actions > button:focus-visible:not(:disabled) {
+  background: linear-gradient(150deg, #e1c079 0%, #c79c44 100%) !important;
+  color: #16110a !important;
+  border-color: #d7b26a !important;
+  box-shadow: 0 0 0 1px rgba(228, 191, 115, 0.4), 0 8px 20px rgba(118, 82, 20, 0.38) !important;
+}
+
+/* AR mobile: Directions — black by default; gold while pressed or when panel is open. */
+.celestial-theme .ar-mobile-directions-btn {
+  background: #060608 !important;
+  background-image: none !important;
+  color: #f4ede1 !important;
+}
+
+.celestial-theme .ar-mobile-directions-btn:hover:not(:disabled):not(.ar-mobile-directions-btn--open) {
+  background-color: rgba(20, 16, 27, 0.98) !important;
+}
+
+.celestial-theme .ar-mobile-directions-btn:active:not(:disabled),
+.celestial-theme .ar-mobile-directions-btn:focus-visible:not(:disabled) {
+  background: linear-gradient(150deg, #e1c079 0%, #c79c44 100%) !important;
+  color: #16110a !important;
+  border-color: #d7b26a !important;
+  box-shadow: 0 0 0 1px rgba(228, 191, 115, 0.4), 0 8px 20px rgba(118, 82, 20, 0.38) !important;
+}
+
+.celestial-theme .ar-mobile-directions-btn.ar-mobile-directions-btn--open {
+  background: linear-gradient(150deg, #e1c079 0%, #c79c44 100%) !important;
+  color: #16110a !important;
+  border-color: #d7b26a !important;
+  box-shadow: 0 0 0 1px rgba(228, 191, 115, 0.35), 0 8px 18px rgba(118, 82, 20, 0.32) !important;
 }
 
 .celestial-theme button[class*="bg-black"]:hover:not(:disabled),
@@ -366,6 +412,22 @@ a[class*="border-white"][class*="shadow-["]:active:not(:disabled) {
 .celestial-theme a[class*="bg-neutral-950"]:hover:not(:disabled) {
   background-color: rgba(20, 16, 27, 0.98) !important;
   box-shadow: 0 0 0 1px rgba(206, 170, 95, 0.2), 0 10px 24px rgba(0, 0, 0, 0.45);
+}
+
+/* Black / near-black controls: gold while pressed (or keyboard-focused). Uses exact
+   Tailwind tokens so `hover:bg-black` alone does not pick up this style at rest. */
+.celestial-theme button.bg-black:active:not(:disabled),
+.celestial-theme button.bg-black:focus-visible:not(:disabled),
+.celestial-theme a.bg-black:active,
+.celestial-theme a.bg-black:focus-visible,
+.celestial-theme button.bg-neutral-950:active:not(:disabled),
+.celestial-theme button.bg-neutral-950:focus-visible:not(:disabled),
+.celestial-theme a.bg-neutral-950:active,
+.celestial-theme a.bg-neutral-950:focus-visible {
+  background: linear-gradient(150deg, #e1c079 0%, #c79c44 100%) !important;
+  color: #16110a !important;
+  border-color: #d7b26a !important;
+  box-shadow: 0 0 0 1px rgba(228, 191, 115, 0.4), 0 8px 20px rgba(118, 82, 20, 0.38) !important;
 }
 
 .celestial-theme input,
@@ -379,6 +441,12 @@ a[class*="border-white"][class*="shadow-["]:active:not(:disabled) {
 .celestial-theme input::placeholder,
 .celestial-theme textarea::placeholder {
   color: rgba(222, 205, 170, 0.48) !important;
+}
+
+/* Checkboxes / radios: checked tint matches celestial gold (desktop + mobile). */
+.celestial-theme input[type="checkbox"],
+.celestial-theme input[type="radio"] {
+  accent-color: #c89d47;
 }
 
 .celestial-theme h1,
@@ -412,4 +480,138 @@ a[class*="border-white"][class*="shadow-["]:active:not(:disabled) {
   border-color: #dfbe7c !important;
   background: linear-gradient(150deg, #e2c27f 0%, #c89d47 100%) !important;
   color: #1a130b !important;
+}
+
+/* Library saved-tattoo masonry cards: no `shadow-[` token (avoids global shadow override); gold frame glow on press/focus. */
+.celestial-theme .library-tattoo-card {
+  box-shadow:
+    4px 4px 0 0 rgba(255, 255, 255, 0.1),
+    0 0 0 1px rgba(221, 182, 102, 0.16);
+}
+
+.celestial-theme .library-tattoo-card:active {
+  border-color: rgba(223, 190, 124, 0.88) !important;
+  box-shadow:
+    0 0 0 2px rgba(223, 190, 124, 0.95),
+    0 0 40px rgba(200, 157, 68, 0.52) !important;
+}
+
+.celestial-theme .library-tattoo-card:focus-visible {
+  border-color: rgba(223, 190, 124, 0.75) !important;
+  box-shadow:
+    0 0 0 2px rgba(223, 190, 124, 0.8),
+    0 0 32px rgba(200, 157, 68, 0.45) !important;
+}
+
+
+
+/* AR change grid + strip: always gold while pressed/focused so users get immediate feedback. */
+.celestial-theme button.library-ar-change-plus:active:not(:disabled),
+.celestial-theme button.library-ar-change-plus:focus-visible:not(:disabled) {
+  background: linear-gradient(150deg, #e1c079 0%, #c79c44 100%) !important;
+  border-top-color: #d7b26a !important;
+  color: #16110a !important;
+  box-shadow: 0 0 0 1px rgba(228, 191, 115, 0.35), 0 6px 14px rgba(118, 82, 20, 0.28) !important;
+}
+
+.celestial-theme button.library-ar-change-plus:active:not(:disabled) svg,
+.celestial-theme button.library-ar-change-plus:focus-visible:not(:disabled) svg {
+  color: #16110a !important;
+}
+/* Library AR “Change design” grid: selected + strip.
+   Selected buttons intentionally omit the `bg-black` / `text-white` class tokens so
+   `.celestial-theme [class*="bg-black"]` and `button[class*="bg-black"]:hover` never override gold.
+   Chained `button.library-ar-change-plus…` beats other button rules on hover/active. */
+.celestial-theme button.library-ar-change-plus.library-ar-change-plus--selected {
+  background: linear-gradient(150deg, #e1c079 0%, #c79c44 100%) !important;
+  background-color: transparent !important;
+  border-top-color: #d7b26a !important;
+  color: #16110a !important;
+  box-shadow: 0 0 0 1px rgba(228, 191, 115, 0.35), 0 6px 14px rgba(118, 82, 20, 0.28) !important;
+}
+
+.celestial-theme button.library-ar-change-plus.library-ar-change-plus--selected:hover:not(:disabled) {
+  background: linear-gradient(150deg, #e8cb8c 0%, #d2a851 100%) !important;
+  box-shadow: 0 0 0 1px rgba(228, 191, 115, 0.42), 0 8px 18px rgba(118, 82, 20, 0.34) !important;
+}
+
+.celestial-theme button.library-ar-change-plus.library-ar-change-plus--selected:active:not(:disabled) {
+  background: linear-gradient(150deg, #e1c079 0%, #c79c44 100%) !important;
+  color: #16110a !important;
+  border-top-color: #d7b26a !important;
+  transform: translate(1px, 2px);
+  box-shadow: 0 0 0 1px rgba(228, 191, 115, 0.3), 0 4px 10px rgba(118, 82, 20, 0.28) !important;
+}
+
+.celestial-theme button.library-ar-change-plus.library-ar-change-plus--selected:focus-visible:not(:disabled) {
+  outline: 2px solid rgba(223, 190, 124, 0.85);
+  outline-offset: 2px;
+}
+
+.celestial-theme button.library-ar-change-plus.library-ar-change-plus--selected svg {
+  color: #16110a !important;
+}
+
+/* Scrollable modals: `overflow-y: scroll` keeps a vertical track when content overflows (vs auto).
+   Styled track/thumb for WebKit + Firefox. iOS Safari may still use overlay scrollbars; gutter helps on desktop. */
+.celestial-theme .celestial-modal-scroll {
+  overflow-y: scroll;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
+  scrollbar-width: auto;
+  scrollbar-color: rgba(201, 162, 71, 0.95) rgba(24, 20, 30, 0.96);
+}
+
+.celestial-theme .celestial-modal-scroll::-webkit-scrollbar {
+  width: 12px;
+}
+
+.celestial-theme .celestial-modal-scroll::-webkit-scrollbar-track {
+  margin: 8px 0;
+  background: rgba(24, 20, 30, 0.96);
+  border-radius: 8px;
+  border: 1px solid rgba(201, 162, 71, 0.38);
+}
+
+.celestial-theme .celestial-modal-scroll::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #e8cb8c 0%, #b8892e 100%);
+  border-radius: 8px;
+  border: 2px solid rgba(8, 8, 12, 0.75);
+  min-height: 48px;
+}
+
+/* Library modals: macOS/WebKit use overlay scrollbars (hidden until scroll). Hide native bar
+   here and show a fixed rail + grip so “scrollable” is always obvious. */
+.celestial-theme .celestial-modal-scroll--with-rail {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.celestial-theme .celestial-modal-scroll--with-rail::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+.celestial-theme .celestial-modal-scroll-rail {
+  position: relative;
+  width: 12px;
+  flex-shrink: 0;
+  align-self: stretch;
+  background: linear-gradient(180deg, rgba(22, 18, 30, 0.98) 0%, rgba(10, 9, 14, 0.99) 100%);
+  border-left: 1px solid rgba(201, 162, 71, 0.45);
+  box-shadow: inset 3px 0 10px rgba(0, 0, 0, 0.35);
+}
+
+/* Thumb position/height are set inline from scroll metrics (see CelestialModalScrollWithRail). */
+.celestial-theme .celestial-modal-scroll-rail__thumb {
+  position: absolute;
+  left: 50%;
+  display: block;
+  width: 5px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(236, 214, 160, 0.62) 0%, rgba(168, 124, 42, 0.52) 100%);
+  box-shadow: 0 0 10px rgba(201, 162, 71, 0.35);
+  pointer-events: none;
 }

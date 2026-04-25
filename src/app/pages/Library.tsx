@@ -1,13 +1,18 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router";
-import { Plus, Pencil, Trash2, X, Upload, Download, Share2 } from "lucide-react";
+import { useNavigate, useSearchParams } from "react-router";
+import { Plus, Trash2, X, Upload, Download, Share2 } from "lucide-react";
 import Masonry, { ResponsiveMasonry } from "react-responsive-masonry";
 import Header from "../components/Header";
+import { CelestialModalScrollWithRail } from "../components/CelestialModalScrollWithRail";
 import { storage } from "../utils/storage";
 import { LibraryItem, ARPhoto } from "../types/tattoo";
 
 export default function Library() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  /** From AR “Change” — show pickable squares with + strip to open that design in AR. */
+  const fromArCameraChange = searchParams.get("arChange") === "1";
+  const arChangeSelectedParam = searchParams.get("selected");
   const [activeTab, setActiveTab] = useState<"tattoos" | "ar">("tattoos");
   const [libraryItems, setLibraryItems] = useState<LibraryItem[]>([]);
   const [arPhotos, setArPhotos] = useState<ARPhoto[]>([]);
@@ -20,10 +25,28 @@ export default function Library() {
   const [arTitle, setArTitle] = useState("");
   const [arDescription, setArDescription] = useState("");
   const [postSuccess, setPostSuccess] = useState<"" | "success" | "error">("");
+  /** AR “Change” grid: which design is selected (gold + strip). */
+  const [arChangeSelectedId, setArChangeSelectedId] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    if (!fromArCameraChange) {
+      setArChangeSelectedId(null);
+      return;
+    }
+
+    if (arChangeSelectedParam && libraryItems.some((i) => i.id === arChangeSelectedParam)) {
+      setArChangeSelectedId(arChangeSelectedParam);
+      return;
+    }
+
+    if (arChangeSelectedId && !libraryItems.some((i) => i.id === arChangeSelectedId)) {
+      setArChangeSelectedId(null);
+    }
+  }, [fromArCameraChange, arChangeSelectedParam, libraryItems, arChangeSelectedId]);
 
   const loadData = () => {
     setLibraryItems(storage.getLibraryItems());
@@ -173,14 +196,64 @@ export default function Library() {
                   Explore Tattoos
                 </button>
               </div>
+            ) : fromArCameraChange ? (
+              <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4">
+                {libraryItems.map((item) => (
+                  <div
+                    key={item.id}
+                    className="overflow-hidden rounded-lg border-2 border-[rgba(201,162,39,0.55)] bg-black shadow-[4px_4px_0px_0px_rgba(143,98,20,0.28)]"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (fromArCameraChange) {
+                          setArChangeSelectedId(item.id);
+                          return;
+                        }
+                        handleEditDescription(item);
+                      }}
+                      className="block w-full text-left"
+                    >
+                      <div className="flex aspect-square items-center justify-center bg-white p-2 sm:p-3">
+                        <img
+                          src={item.imageUrl}
+                          alt={item.title}
+                          className="max-h-full w-full object-contain"
+                        />
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/ar-camera/${item.id}`)}
+                      className={`library-ar-change-plus flex w-full items-center justify-center border-t border-[rgba(201,162,39,0.55)] py-2.5 ${
+                        arChangeSelectedId === item.id
+                          ? "library-ar-change-plus--selected"
+                          : "bg-black text-white"
+                      }`}
+                      aria-label={`Use ${item.title} in AR camera`}
+                      aria-pressed={arChangeSelectedId === item.id}
+                    >
+                      <Plus className="h-4 w-4" strokeWidth={2.25} />
+                    </button>
+                  </div>
+                ))}
+              </div>
             ) : (
               <ResponsiveMasonry columnsCountBreakPoints={{ 350: 2, 750: 3, 900: 4 }}>
                 <Masonry gutter="16px">
                   {libraryItems.map((item) => (
                     <div
                       key={item.id}
+                      role="button"
+                      tabIndex={0}
                       onClick={() => handleEditDescription(item)}
-                      className="group relative cursor-pointer overflow-hidden rounded-lg border border-white/25 bg-black shadow-[4px_4px_0px_0px_rgba(255,255,255,0.12)]"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          handleEditDescription(item);
+                        }
+                      }}
+                      className="library-tattoo-card cursor-pointer overflow-hidden rounded-lg border border-white/25 bg-black transition-[transform,box-shadow,border-color] duration-150 outline-none active:scale-[0.99]"
                     >
                       <div className="flex items-center justify-center bg-black p-2">
                         <img
@@ -199,20 +272,6 @@ export default function Library() {
                             {item.savedDescription}
                           </p>
                         )}
-                      </div>
-                      <div className="absolute bottom-14 right-2 flex gap-2 opacity-0 transition-opacity group-hover:opacity-100">
-                        <button
-                          onClick={() => handleEditDescription(item)}
-                          className="rounded-full bg-white p-2 shadow-lg"
-                        >
-                          <Pencil className="h-4 w-4 text-black" />
-                        </button>
-                        <button
-                          onClick={() => navigate(`/ar-camera/${item.id}`)}
-                          className="rounded-full bg-white p-2 shadow-lg"
-                        >
-                          <Plus className="h-4 w-4 text-black" />
-                        </button>
                       </div>
                     </div>
                   ))}
@@ -271,53 +330,61 @@ export default function Library() {
       {/* Edit Description Modal (Tattoo Designs) */}
       {editingDescription && selectedItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="relative w-full max-w-lg rounded-lg border border-white/20 bg-neutral-950 p-8 shadow-[8px_8px_0px_0px_rgba(255,255,255,0.12)]">
+          <div className="relative flex min-h-0 max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-lg border border-white/20 bg-neutral-950 shadow-[8px_8px_0px_0px_rgba(255,255,255,0.12)]">
             <button
               onClick={() => {
                 setEditingDescription(false);
                 setSelectedItem(null);
               }}
-              className="absolute right-4 top-4"
+              className="absolute right-5 top-4 z-20"
             >
               <X className="h-6 w-6 text-white" />
             </button>
-            <div className="mb-4 overflow-hidden rounded-lg border border-white/20">
-              <img
-                src={selectedItem.imageUrl}
-                alt={selectedItem.title}
-                className="h-48 w-full object-cover"
+            <CelestialModalScrollWithRail
+              key={selectedItem.id}
+              scrollClassName="celestial-modal-scroll celestial-modal-scroll--with-rail min-h-0 flex-1 overflow-y-scroll p-8 pr-4 pt-14"
+            >
+              <div className="mb-4 overflow-hidden rounded-lg border border-white/20">
+                <img
+                  src={selectedItem.imageUrl}
+                  alt={selectedItem.title}
+                  className="h-48 w-full object-cover"
+                />
+              </div>
+              <h2 className="celestial-label mb-2 font-['Fugaz_One:Regular',sans-serif] text-xl text-white">
+                {selectedItem.title}
+              </h2>
+              <textarea
+                value={descriptionText}
+                onChange={(e) => setDescriptionText(e.target.value)}
+                placeholder="Add your notes about this tattoo..."
+                className="mb-4 w-full rounded-lg border border-white/20 bg-black p-3 text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-white/30"
+                rows={4}
               />
-            </div>
-            <h2 className="celestial-label mb-2 font-['Fugaz_One:Regular',sans-serif] text-xl text-white">
-              {selectedItem.title}
-            </h2>
-            <textarea
-              value={descriptionText}
-              onChange={(e) => setDescriptionText(e.target.value)}
-              placeholder="Add your notes about this tattoo..."
-              className="mb-4 w-full rounded-lg border border-white/20 bg-black p-3 text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-white/30"
-              rows={4}
-            />
-            <div className="flex gap-3">
-              <button
-                onClick={handleSaveDescription}
-                className="flex-1 rounded-lg border border-white/25 bg-black py-3 font-['Fugaz_One:Regular',sans-serif] text-white shadow-[2px_4px_0px_0px_rgba(255,255,255,0.12)] active:bg-white active:text-black"
-              >
-                Save
-              </button>
-              <button
-                onClick={() => handleDeleteTattoo(selectedItem.id)}
-                className="flex-1 rounded-lg border border-white/25 bg-black py-3 font-['Fugaz_One:Regular',sans-serif] text-white shadow-[2px_4px_0px_0px_rgba(255,255,255,0.12)] active:bg-white active:text-black"
-              >
-                Delete
-              </button>
-              <button
-                onClick={() => navigate(`/ar-camera/${selectedItem.id}`)}
-                className="flex-1 rounded-lg border border-white/25 bg-black py-3 font-['Fugaz_One:Regular',sans-serif] text-white shadow-[2px_4px_0px_0px_rgba(255,255,255,0.12)] active:bg-white active:text-black"
-              >
-                Try On
-              </button>
-            </div>
+              <div className="library-edit-actions flex gap-3">
+                <button
+                  onClick={handleSaveDescription}
+                  className="flex-1 rounded-lg border border-white/25 bg-black py-3 font-['Fugaz_One:Regular',sans-serif] text-white shadow-[2px_4px_0px_0px_rgba(255,255,255,0.12)]"
+                >
+                  Save
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDeleteTattoo(selectedItem.id)}
+                  className="flex shrink-0 items-center justify-center rounded-lg border border-white/25 bg-black p-3 text-white shadow-[2px_4px_0px_0px_rgba(255,255,255,0.12)]"
+                  title="Delete tattoo"
+                  aria-label="Delete tattoo"
+                >
+                  <Trash2 className="h-5 w-5" />
+                </button>
+                <button
+                  onClick={() => navigate(`/ar-camera/${selectedItem.id}`)}
+                  className="flex-1 rounded-lg border border-white/25 bg-black py-3 font-['Fugaz_One:Regular',sans-serif] text-white shadow-[2px_4px_0px_0px_rgba(255,255,255,0.12)]"
+                >
+                  Try On
+                </button>
+              </div>
+            </CelestialModalScrollWithRail>
           </div>
         </div>
       )}
@@ -325,109 +392,115 @@ export default function Library() {
       {/* AR Photo Detail Modal */}
       {selectedARPhoto && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-lg border border-white/20 bg-neutral-950 p-6 shadow-[8px_8px_0px_0px_rgba(255,255,255,0.12)]">
+          <div className="relative flex min-h-0 max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-lg border border-white/20 bg-neutral-950 shadow-[8px_8px_0px_0px_rgba(255,255,255,0.12)]">
             <button
               onClick={() => setSelectedARPhoto(null)}
-              className="absolute right-4 top-4 z-10"
+              className="absolute right-5 top-4 z-20"
             >
               <X className="h-6 w-6 text-white" />
             </button>
+            <CelestialModalScrollWithRail
+              key={selectedARPhoto.id}
+              scrollClassName="celestial-modal-scroll celestial-modal-scroll--with-rail min-h-0 flex-1 overflow-y-scroll p-6 pb-6 pr-3 pt-14"
+            >
+              {/* AR Photo Preview */}
+              <div className="mb-4 overflow-hidden rounded-lg border border-white/20">
+                <img
+                  src={selectedARPhoto.imageUrl}
+                  alt={arTitle}
+                  className="h-auto w-full object-contain"
+                />
+              </div>
 
-            {/* AR Photo Preview */}
-            <div className="mb-4 overflow-hidden rounded-lg border border-white/20">
-              <img
-                src={selectedARPhoto.imageUrl}
-                alt={arTitle}
-                className="h-auto w-full object-contain"
+              {/* Title Input */}
+              <input
+                type="text"
+                value={arTitle}
+                onChange={(e) => setArTitle(e.target.value)}
+                placeholder="Give your photo a title..."
+                className="mb-3 w-full rounded-lg border border-white/20 bg-black px-4 py-3 font-['Fugaz_One:Regular',sans-serif] text-lg text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-white/30"
               />
-            </div>
 
-            {/* Title Input */}
-            <input
-              type="text"
-              value={arTitle}
-              onChange={(e) => setArTitle(e.target.value)}
-              placeholder="Give your photo a title..."
-              className="mb-3 w-full rounded-lg border border-white/20 bg-black px-4 py-3 font-['Fugaz_One:Regular',sans-serif] text-lg text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-white/30"
-            />
+              {/* Description Input */}
+              <textarea
+                value={arDescription}
+                onChange={(e) => setArDescription(e.target.value)}
+                placeholder="Add your notes about this AR photo..."
+                className="mb-4 w-full rounded-lg border border-white/20 bg-black p-3 text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-white/30"
+                rows={3}
+              />
 
-            {/* Description Input */}
-            <textarea
-              value={arDescription}
-              onChange={(e) => setArDescription(e.target.value)}
-              placeholder="Add your notes about this AR photo..."
-              className="mb-4 w-full rounded-lg border border-white/20 bg-black p-3 text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-white/30"
-              rows={3}
-            />
+              {/* Date */}
+              <p className="celestial-muted mb-4 font-sans text-sm font-semibold">
+                Captured on{" "}
+                {new Date(selectedARPhoto.createdAt).toLocaleDateString("en-US", {
+                  month: "long",
+                  day: "numeric",
+                  year: "numeric",
+                })}
+              </p>
 
-            {/* Date */}
-            <p className="celestial-muted mb-4 text-sm text-white/60">
-              Captured on{" "}
-              {new Date(selectedARPhoto.createdAt).toLocaleDateString("en-US", {
-                month: "long",
-                day: "numeric",
-                year: "numeric",
-              })}
-            </p>
+              {/* Success banner */}
+              {postSuccess === "success" && (
+                <div className="mb-4 rounded-lg border border-emerald-500/40 bg-emerald-950 p-3 text-center">
+                  <p className="font-['Fugaz_One:Regular',sans-serif] text-sm text-emerald-100">
+                    Posted to Explore! Others can now try this design.
+                  </p>
+                </div>
+              )}
 
-            {/* Success banner */}
-            {postSuccess === "success" && (
-              <div className="mb-4 rounded-lg border border-emerald-500/40 bg-emerald-950 p-3 text-center">
-                <p className="font-['Fugaz_One:Regular',sans-serif] text-sm text-emerald-100">
-                  Posted to Explore! Others can now try this design.
-                </p>
+              {/* Error banner */}
+              {postSuccess === "error" && (
+                <div className="mb-4 rounded-lg border border-red-500/50 bg-red-950 p-3 text-center">
+                  <p className="font-['Fugaz_One:Regular',sans-serif] text-sm text-red-100">
+                    Error posting to Explore. Please try again.
+                  </p>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={handleSaveARPhoto}
+                  className="flex-1 rounded-lg border border-white/25 bg-black py-3 font-['Fugaz_One:Regular',sans-serif] text-white shadow-[2px_4px_0px_0px_rgba(255,255,255,0.12)]"
+                >
+                  Save
+                </button>
+                <button
+                  onClick={handleDownloadARPhoto}
+                  className="rounded-lg border border-white/25 bg-black p-3 text-white shadow-[2px_4px_0px_0px_rgba(255,255,255,0.12)]"
+                  title="Download"
+                >
+                  <Download className="h-5 w-5" />
+                </button>
+                <button
+                  onClick={handlePostToExplore}
+                  className="flex items-center gap-2 rounded-lg border border-white/25 bg-neutral-950 px-4 py-3 font-['Fugaz_One:Regular',sans-serif] text-white shadow-[2px_4px_0px_0px_rgba(255,255,255,0.12)]"
+                  title="Post tattoo design to Explore"
+                >
+                  <Share2 className="h-5 w-5" />
+                  Post to Explore
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDeleteARPhoto(selectedARPhoto.id)}
+                  className="rounded-lg border border-white/25 bg-black p-3 text-white shadow-[2px_4px_0px_0px_rgba(255,255,255,0.12)]"
+                  title="Delete"
+                >
+                  <Trash2 className="h-5 w-5" aria-hidden />
+                </button>
               </div>
-            )}
 
-            {/* Error banner */}
-            {postSuccess === "error" && (
-              <div className="mb-4 rounded-lg border border-red-500/50 bg-red-950 p-3 text-center">
-                <p className="font-['Fugaz_One:Regular',sans-serif] text-sm text-red-100">
-                  Error posting to Explore. Please try again.
-                </p>
-              </div>
-            )}
-
-            {/* Action Buttons */}
-            <div className="flex flex-wrap gap-3">
-              <button
-                onClick={handleSaveARPhoto}
-                className="flex-1 rounded-lg border border-white/25 bg-white py-3 font-['Fugaz_One:Regular',sans-serif] text-black shadow-[2px_4px_0px_0px_rgba(255,255,255,0.15)]"
-              >
-                Save
-              </button>
-              <button
-                onClick={handleDownloadARPhoto}
-                className="rounded-lg border border-white/25 bg-black p-3 text-white shadow-[2px_4px_0px_0px_rgba(255,255,255,0.12)]"
-                title="Download"
-              >
-                <Download className="h-5 w-5" />
-              </button>
-              <button
-                onClick={handlePostToExplore}
-                className="flex items-center gap-2 rounded-lg border border-white/25 bg-neutral-950 px-4 py-3 font-['Fugaz_One:Regular',sans-serif] text-white shadow-[2px_4px_0px_0px_rgba(255,255,255,0.12)]"
-                title="Post tattoo design to Explore"
-              >
-                <Share2 className="h-5 w-5" />
-                Post to Explore
-              </button>
-              <button
-                onClick={() => handleDeleteARPhoto(selectedARPhoto.id)}
-                className="rounded-lg border border-red-500/60 bg-red-950 p-3 shadow-[2px_4px_0px_0px_rgba(255,255,255,0.12)]"
-                title="Delete"
-              >
-                <Trash2 className="h-5 w-5 text-red-100" />
-              </button>
-            </div>
-
-            {/* Info note about posting */}
-            <p className="celestial-muted mt-3 text-center text-xs text-white/50">
-              Posting shares the <strong>tattoo design</strong> (not your AR
-              photo) so others can try it in AR too.
-            </p>
+              {/* Info note about posting */}
+              <p className="celestial-muted mt-3 text-balance text-center font-sans text-[10px] font-normal leading-snug sm:text-[11px]">
+                Posting shares the tattoo design (not your AR photo) so others can try it in AR too.
+              </p>
+            </CelestialModalScrollWithRail>
           </div>
         </div>
       )}
+
     </div>
   );
 }
