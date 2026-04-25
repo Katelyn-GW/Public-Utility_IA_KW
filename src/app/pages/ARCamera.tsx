@@ -429,6 +429,7 @@ export default function ARCamera() {
     let lastUpdate = 0;
     let missStreak = 0;
     let highConfidenceStreak = 0;
+    let globalReacquireCooldown = 0;
     const runOne = () => {
       if (cancelled) return;
 
@@ -458,6 +459,7 @@ export default function ARCamera() {
       const frame = renderVideoTrackLuma(video, canvas);
       if (!frame) return;
       const { luma, trkW, trkH, vw, vh } = frame;
+      if (globalReacquireCooldown > 0) globalReacquireCooldown -= 1;
 
       if (!plusTemplateRef.current) {
         const vp = containerPointToVideoPixel(video, container, cx, cy);
@@ -504,8 +506,9 @@ export default function ARCamera() {
         );
         if (!match) {
           missStreak += 1;
-          if (missStreak >= 2) {
+          if (missStreak >= 2 && globalReacquireCooldown === 0) {
             const globalMatch = matchTemplateGlobalCoarse(luma, trkW, trkH, tpl);
+            globalReacquireCooldown = 3;
             if (globalMatch && globalMatch.score >= 0.08) {
               match = globalMatch;
             } else {
@@ -609,10 +612,11 @@ export default function ARCamera() {
       if (!prev) return;
 
       // Throttle + smooth to reduce mobile lag/jitter.
-      if (now - lastUpdate < 14) return;
+      if (now - lastUpdate < 20) return;
       lastUpdate = now;
 
-      const lerp = 0.74;
+      const confidence = Math.max(0, Math.min(1, (match.score - 0.08) / 0.22));
+      const lerp = 0.42 + confidence * 0.32;
       const smoothedX = prev.x + (nextX - prev.x) * lerp;
       const smoothedY = prev.y + (nextY - prev.y) * lerp;
       const moveDelta = Math.hypot(smoothedX - prev.x, smoothedY - prev.y);

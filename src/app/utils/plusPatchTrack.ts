@@ -4,7 +4,7 @@
  * many WebKit bugs with small sub-rect draws from <video> to <canvas>.
  */
 
-export const TRACK_MAX_W = 320;
+export const TRACK_MAX_W = 256;
 /** Patch side in *track* pixels (odd) */
 export const PATCH_TRK = 17;
 export const PATCH_TRK_HALF = (PATCH_TRK - 1) / 2;
