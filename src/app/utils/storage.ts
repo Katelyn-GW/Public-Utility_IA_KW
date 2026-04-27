@@ -10,13 +10,19 @@ export const storage = {
     return data ? JSON.parse(data) : [];
   },
 
-  saveLibraryItem(item: LibraryItem): void {
+  saveLibraryItem(item: LibraryItem): boolean {
     const items = this.getLibraryItems();
     const exists = items.find((i) => i.id === item.id);
     if (!exists) {
-      items.push(item);
-      localStorage.setItem(LIBRARY_KEY, JSON.stringify(items));
+      try {
+        items.push(item);
+        localStorage.setItem(LIBRARY_KEY, JSON.stringify(items));
+      } catch (e) {
+        console.error("Failed to save library item (likely localStorage quota exceeded):", e);
+        return false;
+      }
     }
+    return true;
   },
 
   removeLibraryItem(id: string): void {
@@ -39,10 +45,26 @@ export const storage = {
     return data ? JSON.parse(data) : [];
   },
 
-  saveARPhoto(photo: ARPhoto): void {
+  pruneOldestARPhotos(count: number): number {
+    if (count <= 0) return 0;
     const photos = this.getARPhotos();
-    photos.push(photo);
-    localStorage.setItem(AR_PHOTOS_KEY, JSON.stringify(photos));
+    if (!photos.length) return 0;
+    const removeCount = Math.min(count, photos.length);
+    const trimmed = photos.slice(removeCount);
+    localStorage.setItem(AR_PHOTOS_KEY, JSON.stringify(trimmed));
+    return removeCount;
+  },
+
+  saveARPhoto(photo: ARPhoto): boolean {
+    try {
+      const photos = this.getARPhotos();
+      photos.push(photo);
+      localStorage.setItem(AR_PHOTOS_KEY, JSON.stringify(photos));
+      return true;
+    } catch (e) {
+      console.error("Failed to save AR photo (likely localStorage quota exceeded):", e);
+      return false;
+    }
   },
 
   removeARPhoto(id: string): void {

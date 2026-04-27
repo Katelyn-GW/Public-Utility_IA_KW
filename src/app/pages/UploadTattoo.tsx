@@ -1,72 +1,153 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router";
-import { Upload, Image, AlertTriangle, CheckCircle, X } from "lucide-react";
+import { Upload, AlertTriangle, CheckCircle, X } from "lucide-react";
 import Header from "../components/Header";
 import { storage } from "../utils/storage";
 
 export default function UploadTattoo() {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [preview, setPreview] = useState<string | null>(null);
-  const [fileName, setFileName] = useState("");
+  const [selectedUploads, setSelectedUploads] = useState<
+    Array<{ fileName: string; preview: string; title: string }>
+  >([]);
+  const [activeIndex, setActiveIndex] = useState(0);
   const [title, setTitle] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [isDesktopView, setIsDesktopView] = useState(
+    typeof window !== "undefined" ? window.innerWidth >= 768 : false
+  );
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onResize = () => setIsDesktopView(window.innerWidth >= 768);
+    onResize();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
-    setError(null);
+  const activeUpload = selectedUploads[activeIndex] ?? null;
+  const preview = activeUpload?.preview ?? null;
+  const fileName = activeUpload?.fileName ?? "";
+  const isMultiUpload = selectedUploads.length > 1;
 
-    // Validate file type
-    const validTypes = ["image/png", "image/jpeg", "image/jpg", "image/webp"];
-    if (!validTypes.includes(file.type)) {
-      setError("Please upload a PNG, JPG, or WebP image.");
-      return;
-    }
+  const readFileAsDataURL = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (ev) => resolve((ev.target?.result as string) ?? "");
+      reader.onerror = () => reject(new Error(`Unable to read "${file.name}"`));
+      reader.readAsDataURL(file);
+    });
 
-    // Validate file size (max 10MB)
-    if (file.size > 10 * 1024 * 1024) {
-      setError("Image must be under 10MB.");
-      return;
-    }
-
-    setFileName(file.name);
-    // Auto-generate title from filename
-    const autoTitle = file.name
+  const toAutoTitle = (name: string) =>
+    name
       .replace(/\.[^/.]+$/, "")
       .replace(/[-_]/g, " ")
       .replace(/\b\w/g, (c) => c.toUpperCase());
-    setTitle(autoTitle);
 
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      setPreview(ev.target?.result as string);
-    };
-    reader.readAsDataURL(file);
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    if (!files.length) return;
+
+    setError(null);
+
+    const validTypes = ["image/png", "image/jpeg", "image/jpg"];
+    const validFiles = files.filter(
+      (file) =>
+        validTypes.includes(file.type) && file.size <= 10 * 1024 * 1024
+    );
+
+    if (!validFiles.length) {
+      setError("Please upload PNG/JPG files under 10MB.");
+      return;
+    }
+
+    if (validFiles.length !== files.length) {
+      setError("Some files were skipped (must be PNG/JPG and under 10MB).");
+    }
+
+    const uploads = await Promise.all(
+      validFiles.map(async (file) => ({
+        fileName: file.name,
+        preview: await readFileAsDataURL(file),
+        title: toAutoTitle(file.name),
+      }))
+    );
+
+    const dedupeKey = (u: { fileName: string; preview: string }) =>
+      `${u.fileName}|${u.preview.length}|${u.preview.slice(0, 64)}`;
+
+    setSelectedUploads((prev) => {
+      const merged = isDesktopView ? [...prev, ...uploads] : uploads;
+      const seen = new Set<string>();
+      const unique = merged.filter((u) => {
+        const key = dedupeKey(u);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+
+      if (unique.length > 0) {
+        const nextIndex = isDesktopView && prev.length > 0
+          ? unique.length - 1
+          : 0;
+        setActiveIndex(nextIndex);
+        setTitle(unique[nextIndex]?.title ?? "");
+      }
+
+      return unique;
+    });
   };
 
   const handleSave = () => {
-    if (!preview) return;
+    if (!selectedUploads.length) return;
 
-    const id = `upload-${Date.now()}`;
-    storage.saveLibraryItem({
-      id,
-      imageUrl: preview,
-      title: title || "Uploaded Tattoo",
-      style: "Custom Upload",
-      savedAt: new Date().toISOString(),
+    const now = Date.now();
+    let savedCount = 0;
+    selectedUploads.forEach((upload, idx) => {
+      const isActive = idx === activeIndex;
+      const itemTitle =
+        (isActive ? title.trim() : upload.title.trim()) || "Uploaded Tattoo";
+      const saved = storage.saveLibraryItem({
+        id: `upload-${now}-${idx}`,
+        imageUrl: upload.preview,
+        title: itemTitle,
+        style: "Custom Upload",
+        savedAt: new Date().toISOString(),
+      });
+      if (saved) savedCount += 1;
     });
 
+    if (savedCount === 0) {
+      setError(
+        "Could not save uploads. Your browser storage may be full. Delete older items and try again."
+      );
+      return;
+    }
+
+    if (savedCount < selectedUploads.length) {
+      alert(
+        `Saved ${savedCount} of ${selectedUploads.length} uploads. Browser storage is likely full.`
+      );
+    }
     navigate("/library");
   };
 
   const handleClear = () => {
-    setPreview(null);
-    setFileName("");
+    setSelectedUploads([]);
+    setActiveIndex(0);
     setTitle("");
     setError(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  /** Opens the system image picker only (no `capture` — that forces live camera on mobile). */
+  const openImagePicker = () => {
+    const el = fileInputRef.current;
+    if (!el) return;
+    el.removeAttribute("capture");
+    el.accept = "image/png,image/jpeg,image/jpg";
+    el.value = "";
+    el.click();
   };
 
   return (
@@ -97,7 +178,7 @@ export default function UploadTattoo() {
             </li>
             <li className="flex items-start gap-2">
               <CheckCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-white" />
-              <span>Supported formats: <strong>PNG, JPG, WebP</strong> (max 10MB)</span>
+              <span>Jpg or png format</span>
             </li>
           </ul>
         </div>
@@ -105,42 +186,25 @@ export default function UploadTattoo() {
         {/* Upload Area */}
         {!preview ? (
           <div className="space-y-4">
-            {/* Upload from device */}
             <button
-              onClick={() => fileInputRef.current?.click()}
+              type="button"
+              onClick={openImagePicker}
               className="flex w-full items-center gap-4 rounded-lg border border-white bg-black p-6 shadow-[4px_4px_0px_0px_rgba(255,255,255,0.18)] transition-colors hover:bg-white/5"
             >
-              <div className="rounded-lg bg-white p-3">
-                <Upload className="h-6 w-6 text-black" />
-              </div>
-              <span className="font-['Fugaz_One:Regular',sans-serif] text-lg">
+              <Upload
+                className="h-8 w-8 shrink-0 text-[#dfbe7c]"
+                aria-hidden
+              />
+              <span className="celestial-label font-['Fugaz_One:Regular',sans-serif] text-lg">
                 Upload from Device
-              </span>
-            </button>
-
-            {/* Camera Roll */}
-            <button
-              onClick={() => {
-                if (fileInputRef.current) {
-                  fileInputRef.current.accept = "image/png,image/jpeg,image/jpg,image/webp";
-                  fileInputRef.current.capture = "environment";
-                  fileInputRef.current.click();
-                }
-              }}
-              className="flex w-full items-center gap-4 rounded-lg border border-white bg-black p-6 shadow-[4px_4px_0px_0px_rgba(255,255,255,0.18)] transition-colors hover:bg-white/5"
-            >
-              <div className="rounded-lg bg-white p-3">
-                <Image className="h-6 w-6 text-black" />
-              </div>
-              <span className="font-['Fugaz_One:Regular',sans-serif] text-lg">
-                Camera Roll
               </span>
             </button>
 
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/png,image/jpeg,image/jpg,image/webp"
+              accept="image/png,image/jpeg,image/jpg"
+              multiple={isDesktopView}
               onChange={handleFileSelect}
               className="hidden"
             />
@@ -163,6 +227,35 @@ export default function UploadTattoo() {
             </div>
 
             <p className="celestial-muted mb-2 truncate text-xs text-white/50">{fileName}</p>
+            {isMultiUpload && (
+              <p className="celestial-muted mb-3 text-xs text-white/70">
+                {selectedUploads.length} files selected. Editing title for file {activeIndex + 1}.
+              </p>
+            )}
+
+            {isMultiUpload && (
+              <div className="mb-4 flex flex-wrap gap-2">
+                {selectedUploads.map((upload, idx) => (
+                  <button
+                    key={`${upload.fileName}-${idx}`}
+                    type="button"
+                    onClick={() => {
+                      setActiveIndex(idx);
+                      setTitle(
+                        idx === activeIndex ? title : selectedUploads[idx].title
+                      );
+                    }}
+                    className={`rounded-md border px-2 py-1 text-xs ${
+                      idx === activeIndex
+                        ? "border-white bg-white text-black"
+                        : "border-white/60 bg-black text-white"
+                    }`}
+                  >
+                    {idx + 1}
+                  </button>
+                ))}
+              </div>
+            )}
 
             <label className="celestial-label block mb-1 font-['Fugaz_One:Regular',sans-serif] text-sm">
               Title

@@ -20,6 +20,15 @@ import {
   videoPixelToTrackPixel,
 } from "../utils/plusPatchTrack";
 
+interface CommittedPlacement {
+  id: string;
+  processedTattooUrl: string;
+  tattooSourceId: string;
+  tattooSourceUrl: string;
+  tattooSourceTitle: string;
+  transform: TattooTransform;
+}
+
 function snapTattooCenterToPoint(
   t: TattooTransform,
   px: number,
@@ -37,6 +46,7 @@ export default function ARCamera() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const cameraContainerRef = useRef<HTMLDivElement>(null);
   const uploadContainerRef = useRef<HTMLDivElement>(null);
+  const uploadImageRef = useRef<HTMLImageElement>(null);
 
   const [libraryItems, setLibraryItems] = useState<LibraryItem[]>([]);
   const [selectedTattoo, setSelectedTattoo] = useState<LibraryItem | null>(
@@ -60,6 +70,15 @@ export default function ARCamera() {
   const [processedTattooUrl, setProcessedTattooUrl] = useState<string | null>(
     null
   );
+  const [activePlacementTattoo, setActivePlacementTattoo] = useState<{
+    tattooId: string;
+    tattooImageUrl: string;
+    tattooTitle: string;
+  } | null>(null);
+  const [committedPlacements, setCommittedPlacements] = useState<CommittedPlacement[]>([]);
+  const [isCommittingPlacement, setIsCommittingPlacement] = useState(false);
+  const commitInFlightRef = useRef<Promise<boolean> | null>(null);
+  const placementIdRef = useRef(0);
   const tattooTransformRef = useRef<TattooTransform | null>(null);
   const tattooLockedRef = useRef(false);
   const modeRef = useRef(mode);
@@ -140,8 +159,16 @@ export default function ARCamera() {
       processImageForOverlay(selectedTattoo.imageUrl)
         .then((url) => setProcessedTattooUrl(url))
         .catch((err) => console.error("Failed to process tattoo image:", err));
+      if (!tattooTransformRef.current) {
+        setActivePlacementTattoo({
+          tattooId: selectedTattoo.id,
+          tattooImageUrl: selectedTattoo.imageUrl,
+          tattooTitle: selectedTattoo.title,
+        });
+      }
     } else {
       setProcessedTattooUrl(null);
+      setActivePlacementTattoo(null);
     }
   }, [selectedTattoo]);
 
@@ -222,10 +249,22 @@ export default function ARCamera() {
       reader.onload = (event) => {
         setUploadedImage(event.target?.result as string);
         setCameraError(null);
+        setTattooTransform(null);
+        setTattooLocked(false);
+        setCommittedPlacements([]);
       };
       reader.readAsDataURL(file);
     }
   };
+
+  const loadImage = (src: string) =>
+    new Promise<HTMLImageElement>((resolve, reject) => {
+      const image = new Image();
+      image.crossOrigin = "anonymous";
+      image.onload = () => resolve(image);
+      image.onerror = () => reject(new Error("Image failed to load"));
+      image.src = src;
+    });
 
   // Draw tattoo with full transform onto a canvas context
   const drawTattooOnCanvas = (
@@ -239,8 +278,12 @@ export default function ARCamera() {
   ) => {
     const cx = (t.x - offsetX + t.width / 2) * scaleX;
     const cy = (t.y - offsetY + t.height / 2) * scaleY;
-    const w = t.width * scaleX;
-    const h = t.height * scaleY;
+    const boxW = t.width * scaleX;
+    const boxH = t.height * scaleY;
+    const imgAspect = tattooImg.naturalWidth / Math.max(1, tattooImg.naturalHeight);
+    const boxAspect = boxW / Math.max(1, boxH);
+    const w = imgAspect >= boxAspect ? boxW : boxH * imgAspect;
+    const h = imgAspect >= boxAspect ? boxW / imgAspect : boxH;
 
     ctx.save();
     ctx.globalAlpha = 0.9;
@@ -251,36 +294,11 @@ export default function ARCamera() {
     ctx.restore();
   };
 
-  // Calculate the actual rendered image area inside an object-contain container
-  const getContainedImageRect = (
-    containerW: number,
-    containerH: number,
-    imgW: number,
-    imgH: number
-  ) => {
-    const containerAspect = containerW / containerH;
-    const imgAspect = imgW / imgH;
-    let renderedW: number, renderedH: number, offsetX: number, offsetY: number;
-    if (imgAspect > containerAspect) {
-      renderedW = containerW;
-      renderedH = containerW / imgAspect;
-      offsetX = 0;
-      offsetY = (containerH - renderedH) / 2;
-    } else {
-      renderedH = containerH;
-      renderedW = containerH * imgAspect;
-      offsetX = (containerW - renderedW) / 2;
-      offsetY = 0;
-    }
-    return { renderedW, renderedH, offsetX, offsetY };
-  };
-
-  const captureUploadedPhoto = () => {
+  const captureUploadedPhoto = async () => {
     if (
       !canvasRef.current ||
       !uploadedImage ||
-      !selectedTattoo ||
-      !processedTattooUrl
+      !selectedTattoo
     )
       return;
 
@@ -288,21 +306,37 @@ export default function ARCamera() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const img = new Image();
-    img.onload = () => {
+    try {
+      const img = await loadImage(uploadedImage);
       canvas.width = img.width;
       canvas.height = img.height;
       ctx.drawImage(img, 0, 0);
 
-      if (tattooTransform && uploadContainerRef.current) {
-        const tattooImg = new Image();
-        tattooImg.onload = () => {
-          const containerW = uploadContainerRef.current!.clientWidth;
-          const containerH = uploadContainerRef.current!.clientHeight;
-          const { renderedW, renderedH, offsetX, offsetY } =
-            getContainedImageRect(containerW, containerH, img.width, img.height);
-          const scaleX = img.width / renderedW;
-          const scaleY = img.height / renderedH;
+      if (uploadContainerRef.current && uploadImageRef.current) {
+        const containerRect = uploadContainerRef.current.getBoundingClientRect();
+        const imageRect = uploadImageRef.current.getBoundingClientRect();
+        const renderedW = imageRect.width;
+        const renderedH = imageRect.height;
+        const offsetX = imageRect.left - containerRect.left;
+        const offsetY = imageRect.top - containerRect.top;
+        const scaleX = img.width / renderedW;
+        const scaleY = img.height / renderedH;
+
+        for (const placement of committedPlacements) {
+          const tattooImg = await loadImage(placement.processedTattooUrl);
+          drawTattooOnCanvas(
+            ctx,
+            tattooImg,
+            placement.transform,
+            scaleX,
+            scaleY,
+            offsetX,
+            offsetY
+          );
+        }
+
+        if (tattooTransform && processedTattooUrl) {
+          const tattooImg = await loadImage(processedTattooUrl);
           drawTattooOnCanvas(
             ctx,
             tattooImg,
@@ -312,14 +346,28 @@ export default function ARCamera() {
             offsetX,
             offsetY
           );
-          savePhoto(canvas.toDataURL("image/png"));
-        };
-        tattooImg.src = processedTattooUrl;
-      } else {
-        savePhoto(canvas.toDataURL("image/png"));
+        }
       }
-    };
-    img.src = uploadedImage;
+
+      const placementTattoos = [
+        ...committedPlacements.map((p) => ({
+          tattooId: p.tattooSourceId,
+          tattooImageUrl: p.tattooSourceUrl,
+          tattooTitle: p.tattooSourceTitle,
+        })),
+        ...(tattooTransform && selectedTattoo
+          ? [activePlacementTattoo || {
+              tattooId: selectedTattoo.id,
+              tattooImageUrl: selectedTattoo.imageUrl,
+              tattooTitle: selectedTattoo.title,
+            }]
+          : []),
+      ];
+      savePhoto(encodeCaptureForStorage(canvas), placementTattoos);
+    } catch (err) {
+      console.error("Failed to render upload capture:", err);
+      setCameraError("Could not save this photo. Please try a different image.");
+    }
   };
 
   const capturePhoto = () => {
@@ -356,28 +404,158 @@ export default function ARCamera() {
           0,
           0
         );
-        savePhoto(canvas.toDataURL("image/png"));
+        savePhoto(encodeCaptureForStorage(canvas), [
+          {
+            tattooId: selectedTattoo.id,
+            tattooImageUrl: selectedTattoo.imageUrl,
+            tattooTitle: selectedTattoo.title,
+          },
+        ]);
       };
       tattooImg.src = processedTattooUrl;
     } else {
-      savePhoto(canvas.toDataURL("image/png"));
+      savePhoto(encodeCaptureForStorage(canvas), []);
     }
   };
 
-  const savePhoto = (dataUrl: string) => {
-    if (!selectedTattoo) return;
+  const encodeCaptureForStorage = (canvas: HTMLCanvasElement): string => {
+    // Keep AR saves small enough for localStorage in desktop browsers.
+    const maxEdge = 1400;
+    const srcW = canvas.width;
+    const srcH = canvas.height;
+    const longestEdge = Math.max(srcW, srcH);
 
-    storage.saveARPhoto({
+    if (longestEdge <= maxEdge) {
+      const jpeg = canvas.toDataURL("image/jpeg", 0.78);
+      return jpeg.startsWith("data:image/jpeg") ? jpeg : canvas.toDataURL("image/png");
+    }
+
+    const scale = maxEdge / longestEdge;
+    const outW = Math.max(1, Math.round(srcW * scale));
+    const outH = Math.max(1, Math.round(srcH * scale));
+    const downscaled = document.createElement("canvas");
+    downscaled.width = outW;
+    downscaled.height = outH;
+    const downCtx = downscaled.getContext("2d");
+    if (!downCtx) {
+      const jpeg = canvas.toDataURL("image/jpeg", 0.74);
+      return jpeg.startsWith("data:image/jpeg") ? jpeg : canvas.toDataURL("image/png");
+    }
+    downCtx.drawImage(canvas, 0, 0, outW, outH);
+    const jpeg = downscaled.toDataURL("image/jpeg", 0.74);
+    return jpeg.startsWith("data:image/jpeg") ? jpeg : downscaled.toDataURL("image/png");
+  };
+
+  const savePhoto = (
+    dataUrl: string,
+    placementTattoos: Array<{ tattooId?: string; tattooImageUrl: string; tattooTitle: string }>
+  ) => {
+    if (!selectedTattoo) return;
+    const uniquePlacementMap = new Map<string, { tattooId?: string; tattooImageUrl: string; tattooTitle: string }>();
+    placementTattoos.forEach((p) => {
+      if (!uniquePlacementMap.has(p.tattooImageUrl)) {
+        uniquePlacementMap.set(p.tattooImageUrl, p);
+      }
+    });
+    const uniquePlacementTattoos = Array.from(uniquePlacementMap.values());
+    const uniquePlacementUrls = uniquePlacementTattoos.map((p) => p.tattooImageUrl);
+
+    const payload = {
       id: Date.now().toString(),
       imageUrl: dataUrl,
       tattooId: selectedTattoo.id,
       tattooTitle: selectedTattoo.title,
       tattooImageUrl: selectedTattoo.imageUrl,
+      placementTattooImageUrls: uniquePlacementUrls,
+      placementTattoos: uniquePlacementTattoos,
       createdAt: new Date().toISOString(),
-    });
+    };
+
+    let saved = storage.saveARPhoto(payload);
+    if (!saved) {
+      // Last-resort recovery: progressively free AR space and retry.
+      const retryPruneBatches = [5, 10, 20, 50];
+      for (const batch of retryPruneBatches) {
+        storage.pruneOldestARPhotos(batch);
+        saved = storage.saveARPhoto(payload);
+        if (saved) break;
+      }
+    }
+
+    if (!saved) {
+      alert(
+        "Could not save photo. Your browser storage may be full. Delete older library/AR photos and try again."
+      );
+      return;
+    }
 
     alert("AR photo saved to your library!");
     navigate("/library");
+  };
+
+  const addCurrentTattooPlacement = async (): Promise<boolean> => {
+    if (commitInFlightRef.current) {
+      await commitInFlightRef.current;
+    }
+
+    const transformSnapshot = tattooTransform ? { ...tattooTransform } : null;
+    const processedSnapshot = processedTattooUrl;
+    const sourceTattooSnapshot =
+      activePlacementTattoo ||
+      (selectedTattoo
+        ? {
+            tattooId: selectedTattoo.id,
+            tattooImageUrl: selectedTattoo.imageUrl,
+            tattooTitle: selectedTattoo.title,
+          }
+        : null);
+    if (
+      !transformSnapshot ||
+      !processedSnapshot ||
+      !sourceTattooSnapshot ||
+      !uploadContainerRef.current
+    )
+      return false;
+
+    const commitTask = (async () => {
+      setIsCommittingPlacement(true);
+      try {
+        const nextId = `placement-${Date.now()}-${placementIdRef.current++}`;
+        setCommittedPlacements((prev) => [
+          ...prev,
+          {
+            id: nextId,
+            processedTattooUrl: processedSnapshot,
+            tattooSourceId: sourceTattooSnapshot.tattooId,
+            tattooSourceUrl: sourceTattooSnapshot.tattooImageUrl,
+            tattooSourceTitle: sourceTattooSnapshot.tattooTitle,
+            transform: transformSnapshot,
+          },
+        ]);
+        setTattooTransform(null);
+        setTattooLocked(false);
+        setActivePlacementTattoo(null);
+        return true;
+      } catch (err) {
+        console.error("Failed to add tattoo placement:", err);
+        setCameraError(
+          "Could not add tattoo placement. The image source may be blocked by browser security rules."
+        );
+        alert(
+          "Could not add this tattoo. The first PNG was not deleted; commit failed. Try a PNG from your device upload/library and try again."
+        );
+        return false;
+      } finally {
+        setIsCommittingPlacement(false);
+      }
+    })();
+
+    commitInFlightRef.current = commitTask;
+    const result = await commitTask;
+    if (commitInFlightRef.current === commitTask) {
+      commitInFlightRef.current = null;
+    }
+    return result;
   };
 
   useEffect(() => {
@@ -900,12 +1078,15 @@ export default function ARCamera() {
               {libraryItems.map((item) => (
                 <button
                   key={item.id}
-                  onClick={() => {
+                  onClick={async () => {
                     dismissPlusTapMode();
+                    if (tattooTransform) {
+                      const committed = await addCurrentTattooPlacement();
+                      if (!committed) return;
+                    }
                     setSelectedTattoo(item);
-                    setTattooTransform(null);
-                    setTattooLocked(false);
                   }}
+                  disabled={isCommittingPlacement}
                   className={`w-full overflow-hidden rounded-lg border-2 transition-all ${
                     selectedTattoo?.id === item.id
                       ? "border-white shadow-[4px_4px_0px_0px_rgba(255,255,255,0.35)]"
@@ -944,23 +1125,27 @@ export default function ARCamera() {
             </div>
 
             {/* Camera Error Alert */}
-            {cameraError && mode === "camera" && (
+            {cameraError && (
               <div className="mb-4 rounded-lg border-2 border-orange-600 bg-orange-100 p-4">
                 <p className="mb-2 font-['Fugaz_One:Regular',sans-serif] text-sm text-orange-900">
                   {cameraError}
                 </p>
-                <p className="mb-3 text-xs text-orange-800">
-                  💡 Try "Upload Photo" mode instead to use an existing photo!
-                </p>
-                <button
-                  onClick={() => {
-                    setCameraError(null);
-                    setMode("upload");
-                  }}
-                  className="rounded-lg border border-white bg-white px-4 py-2 text-sm font-['Fugaz_One:Regular',sans-serif] text-black shadow-[2px_2px_0px_0px_rgba(255,255,255,0.25)]"
-                >
-                  Switch to Upload Mode
-                </button>
+                {mode === "camera" && (
+                  <>
+                    <p className="mb-3 text-xs text-orange-800">
+                      💡 Try "Upload Photo" mode instead to use an existing photo!
+                    </p>
+                    <button
+                      onClick={() => {
+                        setCameraError(null);
+                        setMode("upload");
+                      }}
+                      className="rounded-lg border border-white bg-white px-4 py-2 text-sm font-['Fugaz_One:Regular',sans-serif] text-black shadow-[2px_2px_0px_0px_rgba(255,255,255,0.25)]"
+                    >
+                      Switch to Upload Mode
+                    </button>
+                  </>
+                )}
               </div>
             )}
 
@@ -1070,20 +1255,68 @@ export default function ARCamera() {
 
               {mode === "upload" && uploadedImage && (
                 <div className="relative" ref={uploadContainerRef}>
+                  {committedPlacements.length > 0 && (
+                    <div className="absolute left-3 top-3 z-[35] rounded-md border border-white bg-black/85 px-3 py-1 text-xs font-['Fugaz_One:Regular',sans-serif] text-white">
+                      Placed tattoos: {committedPlacements.length}
+                    </div>
+                  )}
                   <img
+                    ref={uploadImageRef}
                     src={uploadedImage}
                     alt="Uploaded"
                     className="h-auto w-full max-h-[600px] object-contain"
                   />
+                  {committedPlacements.map((placement) => (
+                    <div
+                      key={placement.id}
+                      className="pointer-events-none absolute z-[18] overflow-visible"
+                      style={{
+                        left: placement.transform.x,
+                        top: placement.transform.y,
+                        width: placement.transform.width,
+                        height: placement.transform.height,
+                      }}
+                    >
+                      <div
+                        className="absolute inset-0"
+                        style={{
+                          transform: `rotate(${placement.transform.rotation}deg)`,
+                          transformOrigin: "center center",
+                        }}
+                      >
+                        <img
+                          src={placement.processedTattooUrl}
+                          alt="Committed tattoo overlay"
+                          className="pointer-events-none absolute inset-0 h-full w-full object-contain"
+                          style={{
+                            opacity: 0.9,
+                            transform: `scaleX(${placement.transform.flipX ? -1 : 1}) scaleY(${placement.transform.flipY ? -1 : 1})`,
+                          }}
+                          draggable={false}
+                        />
+                      </div>
+                    </div>
+                  ))}
                   {processedTattooUrl && selectedTattoo && (
                     <TattooTransformOverlay
                       processedTattooUrl={processedTattooUrl}
                       containerRef={uploadContainerRef}
                       transform={tattooTransform}
                       onTransformChange={setTattooTransform}
-                      onInitialPlace={setTattooTransform}
-                      locked={tattooLocked}
-                      onToggleLock={() => setTattooLocked((prev) => !prev)}
+                      onInitialPlace={(t) => {
+                        setTattooTransform(t);
+                        if (selectedTattoo) {
+                          setActivePlacementTattoo({
+                            tattooId: selectedTattoo.id,
+                            tattooImageUrl: selectedTattoo.imageUrl,
+                            tattooTitle: selectedTattoo.title,
+                          });
+                        }
+                      }}
+                      locked={false}
+                      onToggleLock={() => {
+                        void addCurrentTattooPlacement();
+                      }}
                     />
                   )}
                   <p className="absolute left-1/2 top-4 -translate-x-1/2 rounded-lg bg-black/70 px-4 py-2 text-sm text-white pointer-events-none z-30">
@@ -1130,17 +1363,28 @@ export default function ARCamera() {
                 <>
                   <button
                     onClick={() => {
+                      void addCurrentTattooPlacement();
+                    }}
+                    disabled={!tattooTransform || isCommittingPlacement}
+                    className="flex-1 rounded-lg border border-white bg-white py-3 font-['Fugaz_One:Regular',sans-serif] text-black shadow-[2px_4px_0px_0px_rgba(255,255,255,0.25)] disabled:opacity-50"
+                  >
+                    {isCommittingPlacement ? "Adding..." : "Add Tattoo"}
+                  </button>
+                  <button
+                    onClick={() => {
                       dismissPlusTapMode();
                       setTattooTransform(null);
                       setTattooLocked(false);
+                      setActivePlacementTattoo(null);
+                      setCommittedPlacements([]);
                     }}
                     className="flex-1 rounded-lg border border-white bg-black py-3 font-['Fugaz_One:Regular',sans-serif] text-white shadow-[2px_4px_0px_0px_rgba(255,255,255,0.25)]"
                   >
-                    Reset Position
+                    Reset All
                   </button>
                   <button
                     onClick={captureUploadedPhoto}
-                    disabled={!tattooTransform}
+                    disabled={!tattooTransform && committedPlacements.length === 0}
                     className="flex-1 rounded-lg border border-white bg-white py-3 font-['Fugaz_One:Regular',sans-serif] text-black shadow-[2px_4px_0px_0px_rgba(255,255,255,0.25)] disabled:opacity-50"
                   >
                     Save Photo

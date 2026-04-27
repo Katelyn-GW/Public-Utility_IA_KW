@@ -110,30 +110,52 @@ export default function Library() {
   const handlePostToExplore = () => {
     if (!selectedARPhoto) return;
 
-    // Try to get the tattoo design URL - check the AR photo first, then look up from library
-    let tattooDesignUrl = selectedARPhoto.tattooImageUrl;
+    const fallbackTattooDesignUrl =
+      selectedARPhoto.tattooImageUrl ||
+      libraryItems.find((item) => item.id === selectedARPhoto.tattooId)?.imageUrl ||
+      selectedARPhoto.imageUrl;
 
-    if (!tattooDesignUrl) {
-      // Fallback: look up the original tattoo from saved library items
-      const libraryItem = libraryItems.find((item) => item.id === selectedARPhoto.tattooId);
-      if (libraryItem) {
-        tattooDesignUrl = libraryItem.imageUrl;
+    const placementTattoos = selectedARPhoto.placementTattoos?.length
+      ? selectedARPhoto.placementTattoos
+      : (selectedARPhoto.placementTattooImageUrls?.length
+          ? selectedARPhoto.placementTattooImageUrls.map((url) => ({
+              tattooImageUrl: url,
+              tattooTitle: selectedARPhoto.tattooTitle,
+            }))
+          : [{
+              tattooImageUrl: fallbackTattooDesignUrl,
+              tattooTitle: selectedARPhoto.tattooTitle,
+            }]);
+
+    const uniquePlacementMap = new Map<string, { tattooId?: string; tattooImageUrl: string; tattooTitle: string }>();
+    placementTattoos.forEach((p) => {
+      if (!uniquePlacementMap.has(p.tattooImageUrl)) {
+        uniquePlacementMap.set(p.tattooImageUrl, p);
       }
-    }
-
-    if (!tattooDesignUrl) {
-      // Last resort: use the AR photo itself
-      tattooDesignUrl = selectedARPhoto.imageUrl;
-    }
-
-    const success = storage.addCommunityPost({
-      id: `community-${Date.now()}`,
-      tattooImageUrl: tattooDesignUrl,
-      arPhotoUrl: "",
-      title: arTitle || selectedARPhoto.tattooTitle,
-      description: arDescription,
-      postedAt: new Date().toISOString(),
     });
+    const uniquePlacementTattoos = Array.from(uniquePlacementMap.values());
+    const baseTitle = arTitle || selectedARPhoto.tattooTitle;
+    const timestamp = Date.now();
+    const successes = uniquePlacementTattoos.map((placement, idx) => {
+      const titleFromId = placement.tattooId
+        ? libraryItems.find((item) => item.id === placement.tattooId)?.title
+        : undefined;
+      const resolvedPlacementTitle =
+        titleFromId || placement.tattooTitle || selectedARPhoto.tattooTitle;
+
+      return storage.addCommunityPost({
+        id: `community-${timestamp}-${idx}`,
+        tattooImageUrl: placement.tattooImageUrl,
+        arPhotoUrl: selectedARPhoto.imageUrl,
+        title:
+          uniquePlacementTattoos.length > 1
+            ? `${baseTitle} - ${resolvedPlacementTitle}`
+            : baseTitle,
+        description: arDescription,
+        postedAt: new Date().toISOString(),
+      });
+    });
+    const success = successes.every(Boolean);
 
     if (success) {
       setPostSuccess("success");
@@ -308,7 +330,7 @@ export default function Library() {
                       <img
                         src={photo.imageUrl}
                         alt={photo.title || photo.tattooTitle}
-                        className="h-auto w-full object-cover"
+                        className="h-auto w-full object-contain bg-black"
                       />
                       <div className="border-t border-white/15 bg-black p-2">
                         <p className="celestial-body font-['Fugaz_One:Regular',sans-serif] text-sm text-white">
@@ -459,11 +481,11 @@ export default function Library() {
               )}
 
               {/* Action Buttons */}
-              <div className="flex flex-wrap gap-3">
+              <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto] gap-2 sm:flex sm:flex-wrap sm:gap-3">
                 <button
                   type="button"
                   onClick={handleSaveARPhoto}
-                  className="flex-1 rounded-lg border border-white/25 bg-black py-3 font-['Fugaz_One:Regular',sans-serif] text-white shadow-[2px_4px_0px_0px_rgba(255,255,255,0.12)]"
+                  className="min-w-0 rounded-lg border border-white/25 bg-black px-2 py-3 text-sm font-['Fugaz_One:Regular',sans-serif] text-white shadow-[2px_4px_0px_0px_rgba(255,255,255,0.12)] sm:flex-1 sm:px-3 sm:text-base"
                 >
                   Save
                 </button>
@@ -476,11 +498,10 @@ export default function Library() {
                 </button>
                 <button
                   onClick={handlePostToExplore}
-                  className="flex items-center gap-2 rounded-lg border border-white/25 bg-neutral-950 px-4 py-3 font-['Fugaz_One:Regular',sans-serif] text-white shadow-[2px_4px_0px_0px_rgba(255,255,255,0.12)]"
-                  title="Post tattoo design to Explore"
+                  className="min-w-0 rounded-lg border border-white/25 bg-neutral-950 px-2 py-3 text-sm font-['Fugaz_One:Regular',sans-serif] text-white shadow-[2px_4px_0px_0px_rgba(255,255,255,0.12)] sm:px-4 sm:text-base"
+                  title="Post tattoo design"
                 >
-                  <Share2 className="h-5 w-5" />
-                  Post to Explore
+                  Post
                 </button>
                 <button
                   type="button"

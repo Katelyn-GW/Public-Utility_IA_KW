@@ -260,7 +260,7 @@ export default function TattooTransformOverlay({
             <img
               src={processedTattooUrl}
               alt="Tattoo overlay"
-              className="pointer-events-none absolute inset-0 h-full w-full"
+              className="pointer-events-none absolute inset-0 h-full w-full object-contain"
               style={{
                 opacity: 0.9,
                 transform: `scaleX(${transform.flipX ? -1 : 1}) scaleY(${transform.flipY ? -1 : 1})`,

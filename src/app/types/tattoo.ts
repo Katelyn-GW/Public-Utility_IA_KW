@@ -18,6 +18,8 @@ export interface ARPhoto {
   tattooId: string;
   tattooTitle: string;
   tattooImageUrl?: string;
+  placementTattooImageUrls?: string[];
+  placementTattoos?: Array<{ tattooId?: string; tattooImageUrl: string; tattooTitle: string }>;
   title?: string;
   description?: string;
   createdAt: string;
